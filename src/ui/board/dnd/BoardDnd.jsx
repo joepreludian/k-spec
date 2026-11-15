@@ -53,6 +53,7 @@ export function BoardDnd({ onCardDrop, onLaneDrop, children }) {
 
   return (
     <DndContext
+      id="board-dnd"
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
