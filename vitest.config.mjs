@@ -13,6 +13,6 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest.setup.js"],
-    include: ["src/**/*.test.{js,jsx}", "proxy.test.js"],
+    include: ["src/**/*.test.{js,jsx}"],
   },
 });

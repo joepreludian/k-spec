@@ -44,7 +44,10 @@ npm run test:watch   # vitest in watch mode
 npm run lint         # eslint (next config)
 npm run build        # production build
 K_SPEC_TOKEN=mytoken npm run dev   # fix the access token instead of a generated one
+K_SPEC_HOST=my-host npm run dev    # host name used in the printed access link
 ```
+
+The server prints `k-spec board: http://<host>:<port>/?token=…` on start. Opening that link sets the `k-spec-token` cookie; without it every page redirects to `/access`. The gate lives in `src/proxy.js` and `src/infrastructure/access/`.
 
 ## Git
 
