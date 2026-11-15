@@ -26,6 +26,8 @@ import { startWork } from "./use-cases/start-work.js";
 import { updateWorkSession } from "./use-cases/update-work-session.js";
 import { endWork } from "./use-cases/end-work.js";
 import { setProject } from "./use-cases/set-project.js";
+import { publishService } from "./use-cases/publish-service.js";
+import { unpublishService } from "./use-cases/unpublish-service.js";
 
 /** Command name → use case. Every transport (local, HTTP, CLI) dispatches by these names. */
 export const COMMANDS = Object.freeze({
@@ -57,6 +59,8 @@ export const COMMANDS = Object.freeze({
   updateWorkSession,
   endWork,
   setProject,
+  publishService,
+  unpublishService,
 });
 
 export const COMMAND_NAMES = Object.freeze(Object.keys(COMMANDS));

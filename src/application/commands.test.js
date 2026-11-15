@@ -6,6 +6,7 @@ const SPEC_NAMES = [
   "createLabel", "updateLabel", "deleteLabel", "addLabel", "removeLabel",
   "addChecklist", "removeChecklist", "addChecklistItem", "toggleChecklistItem", "removeChecklistItem",
   "addComment", "addCardLink", "removeCardLink", "startWork", "updateWorkSession", "endWork", "setProject",
+  "publishService", "unpublishService",
 ];
 
 test("registry has exactly the spec command names", () => {
