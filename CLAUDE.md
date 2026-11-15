@@ -2,7 +2,7 @@
 
 ## Purpose
 
-k-spec is a Trello-style kanban board where a person hands work to AI agents as cards and talks to them on the card: the description is the spec, checklists define "done", comments are the back-and-forth, and an agent status tag shows whether an agent is idle, working, waiting for input, or blocked. Long-term the board is mirrored to files under a project's `docs/k-spec` folder, served from a Docker container, and driven by a CLI. The current slice is the web UI on an in-memory store with seed data, behind a token-link access gate.
+k-spec is a Trello-style kanban board where a person hands work to AI agents as cards and talks to them on the card: the description is the spec, checklists define "done", comments are the back-and-forth, and an agent status tag shows whether an agent is idle, working, waiting for input, or blocked. Long-term the board is mirrored to files under a project's `docs/k-spec` folder, served from a Docker container, and driven by a CLI. The current slice is the web UI on an in-memory store with seed data, behind a token-link access gate: cards carry sequential `#n` numbers, the card dialog has Overview / Spec / Execution / Activity tabs (Spec renders linked markdown files from the project; Execution shows where a card is being worked and the Claude session behind it, seeded for now), and the top bar names the project with links and a README sheet.
 
 ## Stack
 
@@ -21,7 +21,9 @@ src/
   ui/              React components, the board context store (useBoard).
   components/ui/   shadcn-generated primitives.
   app/             Next.js App Router entry; wires everything together.
-proxy.js           Next 16 request proxy (middleware) for the token gate.
+    api/files/[...path]/   GET /api/files/<path>: read-only markdown from the project dir
+    files/[...path]/       /files/<path>: full-page view of one markdown file
+  proxy.js         Next 16 request proxy (middleware) for the token gate.
 ```
 
 Dependency rule: `ui -> application -> domain`. `infrastructure` implements ports and is injected at the edge (`src/app`). Nothing in `domain` or `application` imports from `ui`, `infrastructure`, `react`, or `next`.
@@ -45,9 +47,12 @@ npm run lint         # eslint (next config)
 npm run build        # production build
 K_SPEC_TOKEN=mytoken npm run dev   # fix the access token instead of a generated one
 K_SPEC_HOST=my-host npm run dev    # host name used in the printed access link
+K_SPEC_PROJECT_DIR=/path npm run dev   # directory the markdown viewer reads from (default: cwd)
 ```
 
 The server prints `k-spec board: http://<host>:<port>/?token=…` on start. Opening that link sets the `k-spec-token` cookie; without it every page redirects to `/access`. The gate lives in `src/proxy.js` and `src/infrastructure/access/`.
+
+The file viewer (`/api/files/<path>`, `/files/<path>`, the README sheet, the card Spec tab) serves only `.md`/`.markdown` files inside `K_SPEC_PROJECT_DIR`, capped at 1 MiB, behind the same token; the path rule is `src/domain/markdown-path.js` and the resolver is `src/infrastructure/files/`.
 
 ## Git
 
