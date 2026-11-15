@@ -1,6 +1,6 @@
 import { seedBoard } from "./seed-board.js";
 import { AGENT_STATUSES } from "@/domain/agent-status.js";
-import { reorderLanes } from "@/domain/board.js";
+import { findCard, reorderLanes } from "@/domain/board.js";
 
 const allCards = (b) => b.lanes.flatMap((l) => l.cards);
 
@@ -48,4 +48,37 @@ test("cards are numbered 1..8 in creation order and the counter is 9", () => {
       .sort((a, b) => a[1] - b[1]),
   ).toEqual([1, 2, 3, 4, 5, 6, 7, 8].map((n) => [`card-${n}`, n]));
   expect(board.nextCardNumber).toBe(9);
+});
+
+test("seeds work, history, session and links as the design describes", () => {
+  const board = seedBoard();
+  const card = (id) => findCard(board, id).card;
+  expect(card("card-3").work).toMatchObject({
+    location: { kind: "lima", name: "lima-dev-k-spec-watcher" },
+    branch: "feat/watcher",
+    worktreePath: "~/work/k-spec",
+  });
+  expect(card("card-3").work.session).toMatchObject({
+    id: "8c4acf00-42c1-4317-b31b-d24e744d30d3",
+    model: "claude-fable-5-1",
+    tokens: { input: 184000, output: 22000, cached: 61000 },
+    turns: 37,
+    lastTool: { name: "Bash" },
+  });
+  expect(card("card-3").workHistory).toHaveLength(1);
+  expect(card("card-3").workHistory[0]).toMatchObject({
+    location: { kind: "host", name: "jon-mbp" },
+    branch: "main",
+    session: { tokens: { input: 36000, output: 5000, cached: 12000 }, turns: 9 },
+  });
+  expect(card("card-3").workHistory[0].endedAt).toBe(card("card-3").work.startedAt);
+  expect(card("card-4").work).toMatchObject({ location: { kind: "worktree", name: "k-spec-cli" }, branch: "feat/cli", session: null });
+  expect(card("card-2").work).toMatchObject({ location: { kind: "host", name: "jon-mbp" }, branch: "main" });
+  expect(card("card-3").links.map((l) => l.path)).toEqual([
+    "docs/specs/2026-11-14-k-spec-board-ui-design.md",
+    "docs/specs/2026-11-14-k-spec-board-ui-plan.md",
+  ]);
+  expect(card("card-2").links).toHaveLength(1);
+  expect(card("card-3").events.some((e) => e.type === "status-changed" && e.to === "working")).toBe(true);
+  expect(card("card-3").events.map((e) => e.type)).toEqual(["status-changed", "work-started", "work-ended", "work-started"]);
 });

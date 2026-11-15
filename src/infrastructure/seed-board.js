@@ -10,16 +10,22 @@ import {
   addChecklist,
   addChecklistItem,
   addComment,
+  addLink,
   createCard,
   setAgentStatus,
+  startWork,
   toggleChecklistItem,
   updateDescription,
+  updateWorkSession,
 } from "@/domain/card.js";
 import { PERSON } from "@/domain/author.js";
 
 const BASE = Date.parse("2026-11-14T09:00:00.000Z");
 const at = (hoursAgo) => new Date(BASE - hoursAgo * 3600_000).toISOString();
 const CLAUDE = { kind: "agent", name: "claude" };
+const MODEL = "claude-fable-5-1";
+const HOST = { kind: "host", name: "jon-mbp" };
+const MIN = 1 / 60;
 
 const LANES = [
   ["lane-backlog", "Backlog"],
@@ -41,6 +47,7 @@ const LABELS = [
  * Each card: lane, title, created hours ago, then a list of steps applied in order.
  * Steps: ["desc", md] | ["status", s] | ["label", id] | ["checklist", id, title, [[itemId, text, done]...]]
  *        | ["comment", id, author, body, hoursAgo]
+ *        | ["work", startWorkInput, hoursAgo] | ["session", session, hoursAgo] | ["link", id, title, path]
  */
 const CARDS = [
   {
@@ -60,6 +67,8 @@ const CARDS = [
       ["checklist", "checklist-1", "Acceptance", [["item-1", "moveCard clamps positions", true], ["item-2", "deleteLabel detaches from cards", true], ["item-3", "round-trips to frontmatter", false]]],
       ["comment", "comment-2", PERSON, "Should removing a non-empty lane move its cards somewhere, or fail?", 30],
       ["comment", "comment-3", CLAUDE, "I made it fail with LaneNotEmpty so nothing moves silently. Want the auto-move instead?", 29],
+      ["work", { location: HOST, branch: "main" }, 31],
+      ["link", "link-3", "Board UI design", "docs/specs/2026-11-14-k-spec-board-ui-design.md"],
     ],
   },
   {
@@ -71,6 +80,12 @@ const CARDS = [
       ["status", "working"],
       ["checklist", "checklist-2", "Steps", [["item-4", "chokidar watcher", true], ["item-5", "debounce bursts", false], ["item-6", "SSE channel to the browser", false]]],
       ["comment", "comment-4", CLAUDE, "Watcher prototype running; working on debounce now.", 2],
+      ["work", { location: HOST, branch: "main" }, 30],
+      ["session", { id: "a9cb8a9d-1c2e-4f3a-9b7d-5e6f7a8b9c0d", model: MODEL, tokens: { input: 36000, output: 5000, cached: 12000 }, turns: 9, lastTool: null }, 29],
+      ["work", { location: { kind: "lima", name: "lima-dev-k-spec-watcher" }, branch: "feat/watcher", worktreePath: "~/work/k-spec" }, 41 * MIN],
+      ["session", { id: "8c4acf00-42c1-4317-b31b-d24e744d30d3", model: MODEL, tokens: { input: 184000, output: 22000, cached: 61000 }, turns: 37, lastTool: { name: "Bash", at: at(2 * MIN) } }, 2 * MIN],
+      ["link", "link-1", "Board UI design", "docs/specs/2026-11-14-k-spec-board-ui-design.md"],
+      ["link", "link-2", "Board UI plan", "docs/specs/2026-11-14-k-spec-board-ui-plan.md"],
     ],
   },
   {
@@ -80,6 +95,7 @@ const CARDS = [
       ["label", "label-cli"],
       ["status", "blocked"],
       ["comment", "comment-5", CLAUDE, "Blocked: the API isn't up yet, so there's nothing for the CLI to call. Should I stub it?", 5],
+      ["work", { location: { kind: "worktree", name: "k-spec-cli" }, branch: "feat/cli", worktreePath: "~/work/k-spec/.worktrees/cli" }, 6],
     ],
   },
   {
@@ -143,6 +159,15 @@ function buildCard(spec, board) {
         card = addComment(card, { id, author, body }, at(hoursAgo));
         break;
       }
+      case "work":
+        card = startWork(card, step[1], at(step[2]));
+        break;
+      case "session":
+        card = updateWorkSession(card, step[1], at(step[2]));
+        break;
+      case "link":
+        card = addLink(card, { id: step[1], title: step[2], path: step[3] }, touched);
+        break;
       default:
         throw new Error(`Unknown seed step ${step[0]}`);
     }
