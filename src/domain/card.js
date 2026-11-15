@@ -5,12 +5,19 @@ import {
   ChecklistNotFound,
   EmptyText,
   EmptyTitle,
+  InvalidCardNumber,
 } from "./errors.js";
 import { requireNonEmpty } from "./text.js";
 
-export function createCard({ id, title, now }) {
+function assertCardNumber(number) {
+  if (!Number.isInteger(number) || number < 1) throw new InvalidCardNumber();
+  return number;
+}
+
+export function createCard({ id, number, title, now }) {
   return {
     id,
+    number: assertCardNumber(number),
     title: requireNonEmpty(title, EmptyTitle),
     description: "",
     labelIds: [],

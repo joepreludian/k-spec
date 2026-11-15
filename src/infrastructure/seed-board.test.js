@@ -39,3 +39,13 @@ test("seed is valid (lane ids form a permutation)", () => {
   const ids = allCards(b).map((c) => c.id);
   expect(new Set(ids).size).toBe(ids.length);
 });
+
+test("cards are numbered 1..8 in creation order and the counter is 9", () => {
+  const board = seedBoard();
+  expect(
+    allCards(board)
+      .map((c) => [c.id, c.number])
+      .sort((a, b) => a[1] - b[1]),
+  ).toEqual([1, 2, 3, 4, 5, 6, 7, 8].map((n) => [`card-${n}`, n]));
+  expect(board.nextCardNumber).toBe(9);
+});

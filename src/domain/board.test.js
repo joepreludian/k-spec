@@ -6,6 +6,7 @@ import {
   reorderLanes,
   findLane,
   addCardToLane,
+  addNewCard,
   findCard,
   updateCard,
   removeCard,
@@ -34,10 +35,11 @@ const T0 = "2026-11-14T10:00:00.000Z";
 
 function boardWith(spec) {
   let b = createBoard({ id: "b", name: "Board" });
+  let number = 0;
   for (const [laneId, cardIds] of Object.entries(spec)) {
     b = addLane(b, { id: laneId, name: laneId.toUpperCase() });
     for (const cardId of cardIds) {
-      b = addCardToLane(b, laneId, createCard({ id: cardId, title: cardId, now: T0 }));
+      b = addCardToLane(b, laneId, createCard({ id: cardId, number: ++number, title: cardId, now: T0 }));
     }
   }
   return b;
@@ -50,7 +52,7 @@ const withBug = createLabel(b, { id: "l1", name: "bug", color: "red" });
 const withBugOnC1AndC3 = attachLabel(attachLabel(withBug, "c1", "l1", T0), "c3", "l1", T0);
 
 test("createBoard is empty", () => {
-  expect(createBoard({ id: "b", name: "Board" })).toEqual({ id: "b", name: "Board", lanes: [], labels: [] });
+  expect(createBoard({ id: "b", name: "Board" })).toEqual({ id: "b", name: "Board", lanes: [], labels: [], nextCardNumber: 1 });
 });
 
 test("addLane appends and lane names are validated", () => {
@@ -83,7 +85,7 @@ test("reorderLanes reorders and rejects non-permutation", () => {
 });
 
 test("addCardToLane requires lane", () => {
-  expect(() => addCardToLane(b, "zz", createCard({ id: "x", title: "x", now: T0 }))).toThrow(LaneNotFound);
+  expect(() => addCardToLane(b, "zz", createCard({ id: "x", number: 99, title: "x", now: T0 }))).toThrow(LaneNotFound);
 });
 
 test("findCard returns lane and card or null", () => {
@@ -163,4 +165,29 @@ test("attachLabel/detachLabel update the card", () => {
 test("lanes built via createLane can be added", () => {
   const lane = createLane({ id: "z", name: "Z" });
   expect(addLane(b, lane).lanes.at(-1)).toEqual(lane);
+});
+
+test("createBoard starts the card counter at 1", () => {
+  expect(createBoard({ id: "b", name: "Board" })).toMatchObject({ nextCardNumber: 1 });
+});
+
+test("addNewCard numbers cards sequentially and never reuses a number", () => {
+  let b = addLane(createBoard({ id: "b", name: "Board" }), { id: "a", name: "A" });
+  const first = addNewCard(b, "a", { id: "c1", title: "One", now: T0 });
+  expect(first.card.number).toBe(1);
+  expect(findCard(first.board, "c1").card.number).toBe(1);
+  b = addNewCard(first.board, "a", { id: "c2", title: "Two", now: T0 }).board;
+  b = removeCard(b, "c2");
+  const third = addNewCard(b, "a", { id: "c3", title: "Three", now: T0 });
+  expect(third.card.number).toBe(3);
+  expect(third.board.nextCardNumber).toBe(4);
+});
+
+test("addCardToLane raises the counter above a pre-numbered card", () => {
+  const b = addLane(createBoard({ id: "b", name: "Board" }), { id: "a", name: "A" });
+  const withSeven = addCardToLane(b, "a", createCard({ id: "c7", number: 7, title: "x", now: T0 }));
+  expect(withSeven.nextCardNumber).toBe(8);
+  expect(
+    addCardToLane(withSeven, "a", createCard({ id: "c2", number: 2, title: "y", now: T0 })).nextCardNumber,
+  ).toBe(8);
 });

@@ -115,7 +115,8 @@ const CARDS = [
 ];
 
 function buildCard(spec, board) {
-  let card = createCard({ id: spec.id, title: spec.title, now: at(spec.age) });
+  const number = Number(spec.id.slice("card-".length));
+  let card = createCard({ id: spec.id, number, title: spec.title, now: at(spec.age) });
   const touched = at(spec.age - 1);
   for (const step of spec.steps) {
     switch (step[0]) {

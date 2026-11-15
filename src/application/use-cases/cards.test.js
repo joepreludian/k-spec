@@ -14,7 +14,7 @@ const T_OLD = "2026-11-01T00:00:00.000Z";
 const initial = addCardToLane(
   addLane(addLane(createBoard({ id: "b", name: "Board" }), { id: "a", name: "A" }), { id: "b", name: "B" }),
   "a",
-  newCard({ id: "c1", title: "Existing", now: T_OLD }),
+  newCard({ id: "c1", number: 1, title: "Existing", now: T_OLD }),
 );
 let deps;
 beforeEach(() => {
@@ -71,4 +71,10 @@ test("use cases use the injected clock", async () => {
   const later = { ...deps, clock: fixedClock("2027-01-01T00:00:00.000Z") };
   const { board } = await updateCardTitle(later, { cardId: "c1", title: "x" });
   expect(findCard(board, "c1").card.updatedAt).toBe("2027-01-01T00:00:00.000Z");
+});
+
+test("createCard assigns the board's next number", async () => {
+  const { board } = await createCard(deps, { laneId: "b", title: "New" });
+  expect(findCard(board, "id-1").card.number).toBe(2);
+  expect(board.nextCardNumber).toBe(3);
 });

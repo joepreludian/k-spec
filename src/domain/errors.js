@@ -85,3 +85,8 @@ export class InvalidAuthor extends DomainError {
     super("Author must be a person or an agent with a name", "INVALID_AUTHOR");
   }
 }
+export class InvalidCardNumber extends DomainError {
+  constructor() {
+    super("Card number must be a positive integer", "INVALID_CARD_NUMBER");
+  }
+}

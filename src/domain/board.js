@@ -1,5 +1,6 @@
 import {
   addLabelToCard as cardAddLabel,
+  createCard,
   removeLabelFromCard as cardRemoveLabel,
 } from "./card.js";
 import {
@@ -16,7 +17,7 @@ import { createLane, renameLane as laneRename } from "./lane.js";
 import { requireNonEmpty } from "./text.js";
 
 export function createBoard({ id, name }) {
-  return { id, name, lanes: [], labels: [] };
+  return { id, name, lanes: [], labels: [], nextCardNumber: 1 };
 }
 
 // --- lanes ---------------------------------------------------------------
@@ -61,8 +62,16 @@ export function reorderLanes(board, laneIds) {
 
 // --- cards ---------------------------------------------------------------
 
+/** Appends an already-numbered card; keeps the counter above every number seen. */
 export function addCardToLane(board, laneId, card) {
-  return replaceLane(board, laneId, (lane) => ({ ...lane, cards: [...lane.cards, card] }));
+  const next = replaceLane(board, laneId, (lane) => ({ ...lane, cards: [...lane.cards, card] }));
+  return { ...next, nextCardNumber: Math.max(board.nextCardNumber, card.number + 1) };
+}
+
+/** Creates a card with the board's next number and appends it. Returns `{ board, card }`. */
+export function addNewCard(board, laneId, { id, title, now }) {
+  const card = createCard({ id, number: board.nextCardNumber, title, now });
+  return { board: addCardToLane(board, laneId, card), card };
 }
 
 export function findCard(board, cardId) {

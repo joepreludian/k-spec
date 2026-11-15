@@ -22,12 +22,13 @@ import {
   InvalidAuthor,
   ChecklistNotFound,
   ChecklistItemNotFound,
+  InvalidCardNumber,
 } from "./errors.js";
 
 const T0 = "2026-11-14T10:00:00.000Z";
 const T1 = "2026-11-14T10:05:00.000Z";
 
-const base = () => createCard({ id: "c1", title: "Spec", now: T0 });
+const base = () => createCard({ id: "c1", number: 1, title: "Spec", now: T0 });
 const withList = () => addChecklist(base(), { id: "k1", title: "Acceptance" }, T0);
 const withItems = () =>
   addChecklistItem(
@@ -40,6 +41,7 @@ const withItems = () =>
 test("createCard sets defaults", () => {
   expect(base()).toEqual({
     id: "c1",
+    number: 1,
     title: "Spec",
     description: "",
     labelIds: [],
@@ -52,8 +54,14 @@ test("createCard sets defaults", () => {
 });
 
 test("createCard trims and rejects blank title", () => {
-  expect(createCard({ id: "c1", title: "  Spec ", now: T0 }).title).toBe("Spec");
-  expect(() => createCard({ id: "c1", title: "  ", now: T0 })).toThrow(EmptyTitle);
+  expect(createCard({ id: "c1", number: 1, title: "  Spec ", now: T0 }).title).toBe("Spec");
+  expect(() => createCard({ id: "c1", number: 1, title: "  ", now: T0 })).toThrow(EmptyTitle);
+});
+
+test("createCard requires a positive integer number", () => {
+  expect(base().number).toBe(1);
+  for (const number of [0, -1, 1.5, "1", undefined])
+    expect(() => createCard({ id: "c1", number, title: "Spec", now: T0 })).toThrow(InvalidCardNumber);
 });
 
 test("mutators return new objects and bump updatedAt", () => {

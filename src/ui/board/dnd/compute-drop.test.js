@@ -4,8 +4,8 @@ import { createCard } from "@/domain/card.js";
 
 const T = "2026-11-14T10:00:00.000Z";
 let b = addLane(addLane(createBoard({ id: "x", name: "B" }), { id: "a", name: "A" }), { id: "b", name: "B" });
-for (const id of ["c1", "c2", "c3"]) b = addCardToLane(b, "a", createCard({ id, title: id, now: T }));
-b = addCardToLane(b, "b", createCard({ id: "c4", title: "c4", now: T }));
+for (const [i, id] of ["c1", "c2", "c3"].entries()) b = addCardToLane(b, "a", createCard({ id, number: i + 1, title: id, now: T }));
+b = addCardToLane(b, "b", createCard({ id: "c4", number: 4, title: "c4", now: T }));
 
 test("parseDragId splits kind and id", () => {
   expect(parseDragId("card:c1")).toEqual({ kind: "card", id: "c1" });

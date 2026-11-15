@@ -11,7 +11,7 @@ import { EmptyText } from "@/domain/errors.js";
 const initial = addCardToLane(
   addLane(createBoard({ id: "b", name: "Board" }), { id: "a", name: "A" }),
   "a",
-  createCard({ id: "c1", title: "Card", now: "2026-11-01T00:00:00.000Z" }),
+  createCard({ id: "c1", number: 1, title: "Card", now: "2026-11-01T00:00:00.000Z" }),
 );
 const card = (b) => findCard(b, "c1").card;
 
