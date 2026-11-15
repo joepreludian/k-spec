@@ -47,3 +47,8 @@ test("/access is exempt", async () => {
 test("matcher excludes static assets", () => {
   expect(config.matcher).toEqual(["/((?!_next/static|_next/image|favicon.ico).*)"]);
 });
+
+test("/api/files needs the cookie too", async () => {
+  const res = await proxy(req("http://localhost:3000/api/files/README.md"));
+  expect(res.headers.get("location")).toBe("http://localhost:3000/access");
+});
