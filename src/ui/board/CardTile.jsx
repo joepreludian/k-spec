@@ -7,13 +7,14 @@ import { LabelChip } from "@/ui/shared/LabelChip.jsx";
 import { ProgressBar } from "@/ui/shared/ProgressBar.jsx";
 import { cn } from "@/lib/utils";
 
-export function CardTile({ card, labels, onOpen, className, ...rest }) {
+export function CardTile({ card, labels, onOpen, className, ref, ...rest }) {
   const cardLabels = card.labelIds.map((id) => labels.find((l) => l.id === id)).filter(Boolean);
   const progress = cardProgress(card);
   const commentCount = card.comments.length;
 
   return (
     <button
+      ref={ref}
       type="button"
       onClick={() => onOpen(card.id)}
       className={cn(

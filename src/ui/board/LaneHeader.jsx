@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { GripVertical, MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +19,17 @@ export function LaneHeader({ lane, headingId, dragHandleProps }) {
   const hasCards = lane.cards.length > 0;
 
   return (
-    <div className="flex items-center gap-2 px-1" {...dragHandleProps}>
+    <div className="flex items-center gap-1 px-1">
+      {dragHandleProps && (
+        <button
+          type="button"
+          aria-label="Drag lane"
+          className="cursor-grab rounded p-0.5 text-muted-foreground hover:bg-muted active:cursor-grabbing"
+          {...dragHandleProps}
+        >
+          <GripVertical aria-hidden="true" className="size-4" />
+        </button>
+      )}
       <InlineEdit
         as="h2"
         id={headingId}

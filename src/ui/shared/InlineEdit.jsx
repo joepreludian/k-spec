@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -25,16 +25,6 @@ export function InlineEdit({
     setInternalEditing(next);
     onEditingChange?.(next);
   };
-  const [draft, setDraft] = useState(value);
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (editing) {
-      setDraft(value);
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [editing, value]);
 
   if (!editing) {
     return (
@@ -48,24 +38,36 @@ export function InlineEdit({
     );
   }
 
-  const submit = () => {
-    const next = draft.trim();
-    setEditing(false);
-    if (next.length > 0 && next !== value) onSubmit(next);
-  };
+  // Mounted only while editing, so its draft state resets on every edit session.
+  return (
+    <EditInput
+      initialValue={value}
+      inputLabel={inputLabel}
+      className={inputClassName}
+      onCancel={() => setEditing(false)}
+      onSubmit={(next) => {
+        setEditing(false);
+        if (next.length > 0 && next !== value) onSubmit(next);
+      }}
+    />
+  );
+}
 
+function EditInput({ initialValue, inputLabel, className, onSubmit, onCancel }) {
+  const [draft, setDraft] = useState(initialValue);
   return (
     <Input
-      ref={inputRef}
+      autoFocus
+      onFocus={(e) => e.target.select()}
       aria-label={inputLabel}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => setEditing(false)}
+      onBlur={onCancel}
       onKeyDown={(e) => {
-        if (e.key === "Enter") submit();
-        if (e.key === "Escape") setEditing(false);
+        if (e.key === "Enter") onSubmit(draft.trim());
+        if (e.key === "Escape") onCancel();
       }}
-      className={cn("h-7 text-sm", inputClassName)}
+      className={cn("h-7 text-sm", className)}
     />
   );
 }
