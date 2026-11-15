@@ -82,3 +82,11 @@ test("seeds work, history, session and links as the design describes", () => {
   expect(card("card-3").events.some((e) => e.type === "status-changed" && e.to === "working")).toBe(true);
   expect(card("card-3").events.map((e) => e.type)).toEqual(["status-changed", "work-started", "work-ended", "work-started"]);
 });
+
+test("seeds the project block", () => {
+  expect(seedBoard().project).toEqual({
+    name: "opensource/k-spec",
+    links: [{ id: "link-repo", title: "Repo", url: "https://github.com/opensource/k-spec" }],
+    readmePath: "README.md",
+  });
+});

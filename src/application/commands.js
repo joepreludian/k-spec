@@ -25,6 +25,7 @@ import { removeCardLink } from "./use-cases/remove-card-link.js";
 import { startWork } from "./use-cases/start-work.js";
 import { updateWorkSession } from "./use-cases/update-work-session.js";
 import { endWork } from "./use-cases/end-work.js";
+import { setProject } from "./use-cases/set-project.js";
 
 /** Command name → use case. Every transport (local, HTTP, CLI) dispatches by these names. */
 export const COMMANDS = Object.freeze({
@@ -55,6 +56,7 @@ export const COMMANDS = Object.freeze({
   startWork,
   updateWorkSession,
   endWork,
+  setProject,
 });
 
 export const COMMAND_NAMES = Object.freeze(Object.keys(COMMANDS));

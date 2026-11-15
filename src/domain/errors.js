@@ -133,3 +133,11 @@ export class NoActiveWork extends DomainError {
     super("This card is not being worked on", "NO_ACTIVE_WORK");
   }
 }
+export class InvalidLinkUrl extends DomainError {
+  constructor(url) {
+    super(
+      url ? `"${url}" must start with http:// or https://` : "Link URL must start with http:// or https://",
+      "INVALID_LINK_URL",
+    );
+  }
+}

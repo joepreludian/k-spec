@@ -4,6 +4,7 @@ import {
   attachLabel,
   createBoard,
   createLabel,
+  setProject,
   updateCard,
 } from "@/domain/board.js";
 import {
@@ -176,7 +177,11 @@ function buildCard(spec, board) {
 }
 
 export function seedBoard() {
-  let board = createBoard({ id: "board-1", name: "k-spec" });
+  let board = setProject(createBoard({ id: "board-1", name: "k-spec" }), {
+    name: "opensource/k-spec",
+    links: [{ id: "link-repo", title: "Repo", url: "https://github.com/opensource/k-spec" }],
+    readmePath: "README.md",
+  });
   for (const [id, name] of LANES) board = addLane(board, { id, name });
   for (const [id, name, color] of LABELS) board = createLabel(board, { id, name, color });
   for (const spec of CARDS) {

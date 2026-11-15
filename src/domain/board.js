@@ -8,16 +8,39 @@ import {
   DuplicateLabelName,
   EmptyTitle,
   InvalidLaneOrder,
+  InvalidLinkUrl,
   LabelNotFound,
   LaneNotEmpty,
   LaneNotFound,
 } from "./errors.js";
 import { assertLabelColor } from "./label-colors.js";
 import { createLane, renameLane as laneRename } from "./lane.js";
+import { assertMarkdownPath } from "./markdown-path.js";
 import { requireNonEmpty } from "./text.js";
 
+const EMPTY_PROJECT = Object.freeze({ name: "", links: [], readmePath: null });
+
 export function createBoard({ id, name }) {
-  return { id, name, lanes: [], labels: [], nextCardNumber: 1 };
+  return { id, name, lanes: [], labels: [], nextCardNumber: 1, project: { ...EMPTY_PROJECT } };
+}
+
+// --- project -------------------------------------------------------------
+
+function assertLinkUrl(url) {
+  if (typeof url !== "string" || !/^https?:\/\//i.test(url)) throw new InvalidLinkUrl(url);
+  return url;
+}
+
+/** Replaces the whole project block: `{ name, links: [{ id, title, url }], readmePath }`. */
+export function setProject(board, { name, links = [], readmePath = null }) {
+  return {
+    ...board,
+    project: {
+      name: requireNonEmpty(name, EmptyTitle),
+      links: links.map((l) => ({ id: l.id, title: requireNonEmpty(l.title, EmptyTitle), url: assertLinkUrl(l.url) })),
+      readmePath: readmePath === null ? null : assertMarkdownPath(readmePath),
+    },
+  };
 }
 
 // --- lanes ---------------------------------------------------------------

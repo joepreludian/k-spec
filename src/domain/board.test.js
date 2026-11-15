@@ -17,6 +17,7 @@ import {
   findLabel,
   attachLabel,
   detachLabel,
+  setProject,
 } from "./board.js";
 import { createLane } from "./lane.js";
 import { createCard } from "./card.js";
@@ -25,6 +26,8 @@ import {
   DuplicateLabelName,
   EmptyTitle,
   InvalidLabelColor,
+  InvalidLinkPath,
+  InvalidLinkUrl,
   InvalidLaneOrder,
   LabelNotFound,
   LaneNotEmpty,
@@ -52,7 +55,14 @@ const withBug = createLabel(b, { id: "l1", name: "bug", color: "red" });
 const withBugOnC1AndC3 = attachLabel(attachLabel(withBug, "c1", "l1", T0), "c3", "l1", T0);
 
 test("createBoard is empty", () => {
-  expect(createBoard({ id: "b", name: "Board" })).toEqual({ id: "b", name: "Board", lanes: [], labels: [], nextCardNumber: 1 });
+  expect(createBoard({ id: "b", name: "Board" })).toEqual({
+    id: "b",
+    name: "Board",
+    lanes: [],
+    labels: [],
+    nextCardNumber: 1,
+    project: { name: "", links: [], readmePath: null },
+  });
 });
 
 test("addLane appends and lane names are validated", () => {
@@ -190,4 +200,21 @@ test("addCardToLane raises the counter above a pre-numbered card", () => {
   expect(
     addCardToLane(withSeven, "a", createCard({ id: "c2", number: 2, title: "y", now: T0 })).nextCardNumber,
   ).toBe(8);
+});
+
+test("setProject replaces the block after validating", () => {
+  const b = createBoard({ id: "b", name: "Board" });
+  const project = {
+    name: "opensource/k-spec",
+    links: [{ id: "l1", title: "Repo", url: "https://example.com/r" }],
+    readmePath: "README.md",
+  };
+  expect(setProject(b, project).project).toEqual(project);
+  expect(() => setProject(b, { ...project, name: " " })).toThrow(EmptyTitle);
+  expect(() => setProject(b, { ...project, links: [{ id: "l1", title: "x", url: "javascript:alert(1)" }] })).toThrow(InvalidLinkUrl);
+  expect(() => setProject(b, { ...project, links: [{ id: "l1", title: "x", url: "ftp://h/x" }] })).toThrow(InvalidLinkUrl);
+  expect(() => setProject(b, { ...project, links: [{ id: "l1", title: " ", url: "https://h" }] })).toThrow(EmptyTitle);
+  expect(() => setProject(b, { ...project, readmePath: "../README.md" })).toThrow(InvalidLinkPath);
+  expect(setProject(b, { ...project, readmePath: null }).project.readmePath).toBeNull();
+  expect(setProject(b, { ...project, links: undefined, readmePath: undefined }).project).toEqual({ name: "opensource/k-spec", links: [], readmePath: null });
 });
