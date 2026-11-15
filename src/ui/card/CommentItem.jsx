@@ -1,7 +1,7 @@
 "use client";
 
 import { Bot, User } from "lucide-react";
-import Markdown from "react-markdown";
+import { MarkdownView } from "@/ui/shared/MarkdownView.jsx";
 import { relativeTime } from "@/ui/shared/relative-time.js";
 import { cn } from "@/lib/utils";
 
@@ -32,9 +32,7 @@ export function CommentItem({ comment }) {
             {relativeTime(comment.createdAt)}
           </time>
         </div>
-        <div className="mt-1 [&_p]:my-1 [&_code]:rounded [&_code]:bg-background/60 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em] [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
-          <Markdown>{comment.body}</Markdown>
-        </div>
+        <MarkdownView className="mt-1 [&_code]:bg-background/60">{comment.body}</MarkdownView>
       </div>
     </article>
   );

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Markdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { MarkdownView } from "@/ui/shared/MarkdownView.jsx";
 import { useBoard } from "@/ui/store/use-board.js";
 
 export function DescriptionEditor({ card }) {
@@ -30,9 +30,7 @@ export function DescriptionEditor({ card }) {
           }}
         />
       ) : card.description ? (
-        <div className="prose prose-sm max-w-none text-sm dark:prose-invert [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_p]:my-1.5 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_a]:underline">
-          <Markdown>{card.description}</Markdown>
-        </div>
+        <MarkdownView>{card.description}</MarkdownView>
       ) : (
         <button
           type="button"
