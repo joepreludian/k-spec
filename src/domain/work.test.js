@@ -57,3 +57,14 @@ test("assertWorkSession accepts a full session and rejects bad shapes", () => {
   ])
     expect(() => assertWorkSession(bad)).toThrow(InvalidWorkSession);
 });
+
+test("assertWorkSession treats a missing lastTool as null", () => {
+  const { lastTool: _omit, ...noTool } = session;
+  expect(assertWorkSession(noTool)).toEqual({ ...noTool, lastTool: null });
+});
+
+test("createWork defaults the session's lastActivityAt to now", () => {
+  const { lastActivityAt: _omit, lastTool: _omit2, ...bare } = session;
+  const work = createWork({ location: loc, branch: "b", session: bare, now: T0 });
+  expect(work.session).toEqual({ ...bare, lastTool: null, lastActivityAt: T0 });
+});

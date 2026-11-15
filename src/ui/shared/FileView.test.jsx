@@ -18,3 +18,9 @@ test("shows the error text", async () => {
   render(<FileView path="nope.md" />);
   expect(await screen.findByText("Not found")).toBeInTheDocument();
 });
+
+test("newTab is passed through so board-side viewers never navigate the board away", async () => {
+  global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ content: "[plan](plan.md)" }) });
+  render(<FileView path="docs/README.md" newTab />);
+  expect(await screen.findByRole("link", { name: "plan" })).toHaveAttribute("target", "_blank");
+});

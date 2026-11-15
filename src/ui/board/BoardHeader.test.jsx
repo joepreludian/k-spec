@@ -42,3 +42,11 @@ test("hides project name and README when the project block is empty", () => {
   expect(screen.queryByRole("button", { name: "README" })).not.toBeInTheDocument();
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
 });
+
+test("links inside the README sheet open in a new tab so the board is not lost", async () => {
+  global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ content: "[design](docs/specs/a.md)" }) });
+  renderWithBoard(<BoardHeader />, seedBoard());
+  await userEvent.click(screen.getByRole("button", { name: "README" }));
+  const sheet = await screen.findByRole("dialog");
+  expect(await within(sheet).findByRole("link", { name: "design" })).toHaveAttribute("target", "_blank");
+});

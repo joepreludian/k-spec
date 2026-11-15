@@ -256,3 +256,9 @@ test("checklistSummaries lists each checklist's progress in order", () => {
   ]);
   expect(checklistSummaries(base())).toEqual([]);
 });
+
+test("startWork with a session stamps lastActivityAt when missing", () => {
+  const { lastActivityAt: _omit, ...noStamp } = session;
+  const c = startWork(base(), { location: loc, branch: "feat/x", session: noStamp }, T1);
+  expect(c.work.session.lastActivityAt).toBe(T1);
+});

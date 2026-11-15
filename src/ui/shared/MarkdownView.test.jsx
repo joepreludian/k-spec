@@ -20,3 +20,16 @@ test("without basePath relative links are left alone", () => {
   render(<MarkdownView>{"[plan](./plan.md)"}</MarkdownView>);
   expect(screen.getByRole("link", { name: "plan" })).toHaveAttribute("href", "./plan.md");
 });
+
+test("newTab opens internal links in a new tab as well", () => {
+  render(
+    <MarkdownView basePath="docs/a.md" newTab>
+      {"[plan](plan.md) [top](#top)"}
+    </MarkdownView>,
+  );
+  const plan = screen.getByRole("link", { name: "plan" });
+  expect(plan).toHaveAttribute("href", "/files/docs/plan.md");
+  expect(plan).toHaveAttribute("target", "_blank");
+  expect(plan).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
+  expect(screen.getByRole("link", { name: "top" })).not.toHaveAttribute("target");
+});

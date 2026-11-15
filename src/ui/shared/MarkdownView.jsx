@@ -9,9 +9,11 @@ const PROSE =
 
 /**
  * Renders markdown. With `basePath` (the file being viewed), relative `.md` links are
- * rewritten to the in-app file page; external links open in a new tab.
+ * rewritten to the in-app file page; external links open in a new tab. `newTab` makes the
+ * internal links open in a new tab too: on the board the state lives in this tab only, so a
+ * same-tab navigation from the README sheet or the Spec tab would throw the board away.
  */
-export function MarkdownView({ children, basePath, className }) {
+export function MarkdownView({ children, basePath, newTab = false, className }) {
   const components = {
     a: ({ href, children: linkChildren, node: _node, ...rest }) => {
       const link = rewriteMarkdownHref(href, basePath);
@@ -23,8 +25,9 @@ export function MarkdownView({ children, basePath, className }) {
           </a>
         );
       }
+      const blank = newTab && link.kind === "internal" ? { target: "_blank", rel: "noreferrer noopener" } : {};
       return (
-        <a href={link.href} {...rest}>
+        <a href={link.href} {...blank} {...rest}>
           {linkChildren}
         </a>
       );

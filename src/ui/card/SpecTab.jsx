@@ -63,7 +63,7 @@ export function SpecTab({ card }) {
               </Button>
             </div>
             <div className="rounded-md border p-3">
-              <FileView path={selected.path} />
+              <FileView path={selected.path} newTab />
             </div>
           </div>
         ) : (

@@ -80,3 +80,11 @@ test("empty state", () => {
   expect(screen.getByText("No linked files yet")).toBeInTheDocument();
   expect(global.fetch).not.toHaveBeenCalled();
 });
+
+test("links inside a rendered spec open in a new tab so the board is not lost", async () => {
+  global.fetch = okFetch("[plan](2026-11-14-k-spec-board-ui-plan.md)");
+  renderWithBoard(<SpecTab card={card3} />, board);
+  const link = await screen.findByRole("link", { name: "plan" });
+  expect(link).toHaveAttribute("href", "/files/docs/specs/2026-11-14-k-spec-board-ui-plan.md");
+  expect(link).toHaveAttribute("target", "_blank");
+});

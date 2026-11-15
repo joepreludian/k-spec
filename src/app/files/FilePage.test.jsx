@@ -12,3 +12,9 @@ test("renders the path as heading, a back link and the file", async () => {
   expect(screen.getByRole("link", { name: "Back to board" })).toHaveAttribute("href", "/");
   expect(await screen.findByText("body text")).toBeInTheDocument();
 });
+
+test("on the full page, internal links navigate in the same tab", async () => {
+  global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ content: "[b](b.md)" }) });
+  render(<FilePage path="docs/a.md" />);
+  expect(await screen.findByRole("link", { name: "b" })).not.toHaveAttribute("target");
+});

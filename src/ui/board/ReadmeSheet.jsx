@@ -29,7 +29,7 @@ export function ReadmeSheet({ path }) {
           </Button>
         </SheetHeader>
         <div className="p-4">
-          <FileView path={path} />
+          <FileView path={path} newTab />
         </div>
       </SheetContent>
     </Sheet>

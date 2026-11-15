@@ -12,7 +12,7 @@ import {
 } from "./errors.js";
 import { assertMarkdownPath } from "./markdown-path.js";
 import { requireNonEmpty } from "./text.js";
-import { assertWorkSession, createWork } from "./work.js";
+import { assertWorkSession, createWork, withActivityStamp } from "./work.js";
 
 function assertCardNumber(number) {
   if (!Number.isInteger(number) || number < 1) throw new InvalidCardNumber();
@@ -90,11 +90,7 @@ export function startWork(card, { location, branch, worktreePath, session }, now
 /** Replaces the session block. Deliberately does not bump updatedAt or add an event (token ticks). */
 export function updateWorkSession(card, session, now) {
   if (!card.work) throw new NoActiveWork();
-  const clean = assertWorkSession(session);
-  return {
-    ...card,
-    work: { ...card.work, session: { ...clean, lastActivityAt: clean.lastActivityAt ?? now } },
-  };
+  return { ...card, work: { ...card.work, session: withActivityStamp(assertWorkSession(session), now) } };
 }
 
 export function endWork(card, now) {
