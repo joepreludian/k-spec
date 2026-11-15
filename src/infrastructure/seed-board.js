@@ -18,6 +18,7 @@ import {
   toggleChecklistItem,
   updateDescription,
   updateWorkSession,
+  publishService,
 } from "@/domain/card.js";
 import { PERSON } from "@/domain/author.js";
 
@@ -85,6 +86,8 @@ const CARDS = [
       ["session", { id: "a9cb8a9d-1c2e-4f3a-9b7d-5e6f7a8b9c0d", model: MODEL, tokens: { input: 36000, output: 5000, cached: 12000 }, turns: 9, lastTool: null }, 7],
       ["work", { location: { kind: "lima", name: "lima-dev-k-spec-watcher" }, branch: "feat/watcher", worktreePath: "~/work/k-spec" }, 41 * MIN],
       ["session", { id: "8c4acf00-42c1-4317-b31b-d24e744d30d3", model: MODEL, tokens: { input: 184000, output: 22000, cached: 61000 }, turns: 37, lastTool: { name: "Bash", at: at(2 * MIN) } }, 2 * MIN],
+      ["service", "service-1", "http://lima-dev-k-spec-main.local:3000", 2 * MIN],
+      ["service", "service-2", "http://localhost:8002", 2 * MIN],
       ["link", "link-1", "Board UI design", "docs/specs/2026-11-14-k-spec-board-ui-design.md"],
       ["link", "link-2", "Board UI plan", "docs/specs/2026-11-14-k-spec-board-ui-plan.md"],
     ],
@@ -165,6 +168,9 @@ function buildCard(spec, board) {
         break;
       case "session":
         card = updateWorkSession(card, step[1], at(step[2]));
+        break;
+      case "service":
+        card = publishService(card, { id: step[1], url: step[2] }, at(step[3]));
         break;
       case "link":
         card = addLink(card, { id: step[1], title: step[2], path: step[3] }, touched);

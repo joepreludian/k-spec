@@ -96,3 +96,14 @@ test("card-3's previous work happened on 2026-11-14", () => {
   expect(entry.startedAt.slice(0, 10)).toBe("2026-11-14");
   expect(entry.endedAt.slice(0, 10)).toBe("2026-11-14");
 });
+
+test("card-3 publishes two services on its active work; other work has none", () => {
+  const board = seedBoard();
+  expect(findCard(board, "card-3").card.work.services).toEqual([
+    { id: "service-1", title: "lima-dev-k-spec-main.local:3000", url: "http://lima-dev-k-spec-main.local:3000" },
+    { id: "service-2", title: "localhost:8002", url: "http://localhost:8002" },
+  ]);
+  expect(findCard(board, "card-2").card.work.services).toEqual([]);
+  expect(findCard(board, "card-4").card.work.services).toEqual([]);
+  expect(findCard(board, "card-3").card.workHistory[0].services).toEqual([]);
+});
