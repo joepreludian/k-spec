@@ -90,3 +90,9 @@ test("seeds the project block", () => {
     readmePath: "README.md",
   });
 });
+
+test("card-3's previous work happened on 2026-11-14", () => {
+  const entry = findCard(seedBoard(), "card-3").card.workHistory[0];
+  expect(entry.startedAt.slice(0, 10)).toBe("2026-11-14");
+  expect(entry.endedAt.slice(0, 10)).toBe("2026-11-14");
+});

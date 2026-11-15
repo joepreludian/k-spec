@@ -20,6 +20,7 @@ import { CardDialogContent } from "./CardDialogContent.jsx";
 import { DeleteCardButton } from "./DeleteCardButton.jsx";
 import { LabelPicker } from "./LabelPicker.jsx";
 import { OverviewTab } from "./OverviewTab.jsx";
+import { ExecutionTab } from "./ExecutionTab.jsx";
 import { SpecTab } from "./SpecTab.jsx";
 
 const Count = ({ n }) =>
@@ -91,7 +92,7 @@ export function CardDialog({ cardId, onClose }) {
               <SpecTab card={card} />
             </TabsContent>
             <TabsContent value="execution" className="min-h-0 flex-1 overflow-y-auto pr-1">
-              <p className="text-sm text-muted-foreground">Coming next</p>
+              <ExecutionTab card={card} />
             </TabsContent>
             <TabsContent value="activity" className="min-h-0 flex-1 overflow-y-auto pr-1">
               <p className="text-sm text-muted-foreground">Coming next</p>
