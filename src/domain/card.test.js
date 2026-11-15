@@ -206,7 +206,7 @@ const session = {
 
 test("startWork sets work and records an event", () => {
   const c = startWork(base(), { location: loc, branch: "feat/x" }, T1);
-  expect(c.work).toEqual({ location: loc, branch: "feat/x", worktreePath: null, startedAt: T1, session: null });
+  expect(c.work).toEqual({ location: loc, branch: "feat/x", worktreePath: null, startedAt: T1, session: null, services: [] });
   expect(c.events).toEqual([{ type: "work-started", location: loc, branch: "feat/x", at: T1 }]);
   expect(c.updatedAt).toBe(T1);
 });

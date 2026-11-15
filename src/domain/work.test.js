@@ -15,6 +15,7 @@ test("createWork fills defaults", () => {
     worktreePath: null,
     startedAt: T0,
     session: null,
+    services: [],
   });
 });
 

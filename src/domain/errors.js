@@ -110,6 +110,16 @@ export class LinkNotFound extends DomainError {
     super(describe("Link", "not found")(id), "LINK_NOT_FOUND");
   }
 }
+export class DuplicateService extends DomainError {
+  constructor(url) {
+    super(url ? `"${url}" is already published` : "That service is already published", "DUPLICATE_SERVICE");
+  }
+}
+export class ServiceNotFound extends DomainError {
+  constructor(id) {
+    super(describe("Service", "not found")(id), "SERVICE_NOT_FOUND");
+  }
+}
 export class InvalidWorkLocation extends DomainError {
   constructor(kind) {
     super(

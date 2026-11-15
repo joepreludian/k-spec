@@ -51,5 +51,6 @@ export function createWork({ location, branch, worktreePath = null, session = nu
     worktreePath: typeof worktreePath === "string" && worktreePath.trim() ? worktreePath : null,
     startedAt: now,
     session: session === null ? null : withActivityStamp(assertWorkSession(session), now),
+    services: [],
   };
 }

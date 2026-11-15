@@ -4,13 +4,16 @@ import {
   ChecklistItemNotFound,
   ChecklistNotFound,
   DuplicateLink,
+  DuplicateService,
   EmptyText,
   EmptyTitle,
   InvalidCardNumber,
   LinkNotFound,
   NoActiveWork,
+  ServiceNotFound,
 } from "./errors.js";
 import { assertMarkdownPath } from "./markdown-path.js";
+import { createService } from "./service.js";
 import { requireNonEmpty } from "./text.js";
 import { assertWorkSession, createWork, withActivityStamp } from "./work.js";
 
@@ -96,6 +99,27 @@ export function updateWorkSession(card, session, now) {
 export function endWork(card, now) {
   if (!card.work) throw new NoActiveWork();
   return touch(archiveWork(card, now), {}, now);
+}
+
+// --- services (things a person can open, published on the active work) -----
+
+const withServices = (card, services, now) => touch(card, { work: { ...card.work, services } }, now);
+
+export function publishService(card, { id, title, url }, now) {
+  if (!card.work) throw new NoActiveWork();
+  const service = createService({ id, title, url });
+  if (card.work.services.some((s) => s.url === service.url)) throw new DuplicateService(service.url);
+  return withServices(card, [...card.work.services, service], now);
+}
+
+export function unpublishService(card, serviceId, now) {
+  if (!card.work) throw new NoActiveWork();
+  if (!card.work.services.some((s) => s.id === serviceId)) throw new ServiceNotFound(serviceId);
+  return withServices(
+    card,
+    card.work.services.filter((s) => s.id !== serviceId),
+    now,
+  );
 }
 
 export function addChecklist(card, { id, title }, now) {
