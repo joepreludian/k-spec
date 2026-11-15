@@ -27,13 +27,17 @@ export function InlineEdit({
   };
 
   if (!editing) {
+    // The inner button gives keyboard users a focus stop (Enter/Space fire a
+    // native click, which bubbles to the Tag's onClick); the Tag keeps its
+    // semantics (heading, dialog title) and accessible name.
     return (
-      <Tag
-        {...rest}
-        className={cn("cursor-text rounded px-1 -mx-1 hover:bg-muted/60", className)}
-        onClick={() => setEditing(true)}
-      >
-        {value}
+      <Tag {...rest} className={className} onClick={() => setEditing(true)}>
+        <button
+          type="button"
+          className="-mx-1 cursor-text rounded px-1 text-left font-[inherit] hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {value}
+        </button>
       </Tag>
     );
   }

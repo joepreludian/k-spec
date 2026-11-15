@@ -6,6 +6,7 @@ import { seedBoard } from "@/infrastructure/seed-board.js";
 import { createBoard, addLane } from "@/domain/board.js";
 
 const lane = (name) => screen.getByRole("region", { name });
+const tileNamed = (re) => screen.getByRole("button", { name: (n) => re.test(n) && !n.startsWith("Drag card") });
 
 test("renders lanes in order with card counts", () => {
   renderWithBoard(<BoardView />, seedBoard());
@@ -71,7 +72,7 @@ test("remove lane is disabled when lane has cards and dispatches when empty", as
 
 test("clicking a card opens the detail dialog", async () => {
   renderWithBoard(<BoardView />, seedBoard());
-  await userEvent.click(screen.getByRole("button", { name: /File watcher for docs\/k-spec/ }));
+  await userEvent.click(tileNamed(/File watcher for docs\/k-spec/));
   expect(await screen.findByRole("dialog")).toBeInTheDocument();
 });
 
@@ -79,4 +80,16 @@ test("empty board shows only the add-lane control", () => {
   renderWithBoard(<BoardView />, createBoard({ id: "b", name: "Empty board" }));
   expect(screen.queryAllByRole("heading", { level: 2 })).toHaveLength(0);
   expect(screen.getByRole("button", { name: "+ Lane" })).toBeInTheDocument();
+});
+
+test("keyboard: Enter on a focused card opens the detail dialog", async () => {
+  renderWithBoard(<BoardView />, seedBoard());
+  tileNamed(/File watcher for docs\/k-spec/).focus();
+  await userEvent.keyboard("{Enter}");
+  expect(await screen.findByRole("dialog")).toBeInTheDocument();
+});
+
+test("each card has a separate drag handle", () => {
+  renderWithBoard(<BoardView />, seedBoard());
+  expect(screen.getByRole("button", { name: "Drag card File watcher for docs/k-spec" })).toBeInTheDocument();
 });
