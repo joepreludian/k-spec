@@ -14,28 +14,57 @@ afterEach(() => {
   delete global.fetch;
 });
 
-test("lists links, selects the first, fetches and renders it with an open-in-new-tab link", async () => {
-  global.fetch = okFetch("# Design doc");
+test("shows a tile per link and fetches nothing until one is opened", () => {
+  global.fetch = vi.fn();
   renderWithBoard(<SpecTab card={card3} />, board);
-  expect(screen.getByRole("button", { name: /^Board UI design/ })).toHaveAttribute("aria-pressed", "true");
-  expect(screen.getByRole("button", { name: /^Board UI plan/ })).toHaveAttribute("aria-pressed", "false");
-  expect(screen.getByText("docs/specs/2026-11-14-k-spec-board-ui-plan.md")).toBeInTheDocument();
-  expect(await screen.findByRole("heading", { name: "Design doc" })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /Open in new tab/ })).toHaveAttribute(
-    "href",
-    "/files/docs/specs/2026-11-14-k-spec-board-ui-design.md",
+  expect(screen.getByRole("button", { name: "Board UI design" })).toHaveAttribute(
+    "title",
+    "docs/specs/2026-11-14-k-spec-board-ui-design.md",
   );
-  expect(global.fetch).toHaveBeenCalledWith("/api/files/docs/specs/2026-11-14-k-spec-board-ui-design.md", expect.anything());
+  expect(screen.getByRole("button", { name: "Board UI plan" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Files" })).not.toBeInTheDocument();
+  expect(global.fetch).not.toHaveBeenCalled();
 });
 
-test("clicking another link fetches it", async () => {
-  global.fetch = okFetch("x");
+test("clicking a tile shows that document in place of the grid", async () => {
+  global.fetch = okFetch("# Plan doc");
   renderWithBoard(<SpecTab card={card3} />, board);
-  await userEvent.click(screen.getByRole("button", { name: /^Board UI plan/ }));
-  await waitFor(() =>
-    expect(global.fetch).toHaveBeenLastCalledWith("/api/files/docs/specs/2026-11-14-k-spec-board-ui-plan.md", expect.anything()),
+  await userEvent.click(screen.getByRole("button", { name: "Board UI plan" }));
+  expect(await screen.findByRole("heading", { name: "Plan doc" })).toBeInTheDocument();
+  expect(global.fetch).toHaveBeenCalledWith("/api/files/docs/specs/2026-11-14-k-spec-board-ui-plan.md", expect.anything());
+  expect(screen.getByText("docs/specs/2026-11-14-k-spec-board-ui-plan.md")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Open in new tab/ })).toHaveAttribute(
+    "href",
+    "/files/docs/specs/2026-11-14-k-spec-board-ui-plan.md",
   );
-  expect(screen.getByRole("button", { name: /^Board UI plan/ })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.queryByRole("button", { name: "Board UI design" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Add link" })).not.toBeInTheDocument();
+});
+
+test("Files returns from the document to the grid", async () => {
+  global.fetch = okFetch("# Plan doc");
+  renderWithBoard(<SpecTab card={card3} />, board);
+  await userEvent.click(screen.getByRole("button", { name: "Board UI plan" }));
+  await userEvent.click(screen.getByRole("button", { name: "Files" }));
+  expect(screen.getByRole("button", { name: "Board UI design" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Plan doc" })).not.toBeInTheDocument();
+});
+
+test("a file that fails to load still offers the way back", async () => {
+  global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: "File not found" }) });
+  renderWithBoard(<SpecTab card={card3} />, board);
+  await userEvent.click(screen.getByRole("button", { name: "Board UI plan" }));
+  expect(await screen.findByText("Not found")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Files" })).toBeInTheDocument();
+});
+
+test("falls back to the grid when the open link is removed from the card", async () => {
+  global.fetch = okFetch("# Plan doc");
+  const { rerender } = renderWithBoard(<SpecTab card={card3} />, board);
+  await userEvent.click(screen.getByRole("button", { name: "Board UI plan" }));
+  rerender(<SpecTab card={{ ...card3, links: card3.links.filter((l) => l.id !== "link-2") }} />);
+  expect(screen.getByRole("button", { name: "Board UI design" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Files" })).not.toBeInTheDocument();
 });
 
 test("adding a link dispatches addCardLink and closes the form", async () => {
@@ -67,23 +96,27 @@ test("a rejected path keeps the form open and shows a toast", async () => {
   expect(await screen.findByText(/not a relative markdown file path/)).toBeInTheDocument();
 });
 
-test("remove dispatches removeCardLink", async () => {
-  global.fetch = okFetch("x");
+test("remove dispatches removeCardLink without opening the file", async () => {
+  global.fetch = vi.fn();
   const { executor } = renderWithBoard(<SpecTab card={card3} />, board);
   await userEvent.click(screen.getByRole("button", { name: "Remove link Board UI plan" }));
   expect(executor.execute).toHaveBeenCalledWith("removeCardLink", { cardId: "card-3", linkId: "link-2" });
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "Files" })).not.toBeInTheDocument();
 });
 
 test("empty state", () => {
   global.fetch = vi.fn();
   renderWithBoard(<SpecTab card={findCard(board, "card-1").card} />, board);
   expect(screen.getByText("No linked files yet")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Add link" })).toBeInTheDocument();
   expect(global.fetch).not.toHaveBeenCalled();
 });
 
 test("links inside a rendered spec open in a new tab so the board is not lost", async () => {
   global.fetch = okFetch("[plan](2026-11-14-k-spec-board-ui-plan.md)");
   renderWithBoard(<SpecTab card={card3} />, board);
+  await userEvent.click(screen.getByRole("button", { name: "Board UI design" }));
   const link = await screen.findByRole("link", { name: "plan" });
   expect(link).toHaveAttribute("href", "/files/docs/specs/2026-11-14-k-spec-board-ui-plan.md");
   expect(link).toHaveAttribute("target", "_blank");
