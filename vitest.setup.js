@@ -28,3 +28,21 @@ if (typeof window !== "undefined" && !window.matchMedia) {
     removeListener() {},
   });
 }
+
+// jsdom has no PointerEvent; Radix (Select, DropdownMenu) only opens on
+// pointerdown events whose pointerType is "mouse".
+if (typeof window !== "undefined" && !window.PointerEvent) {
+  class PointerEvent extends MouseEvent {
+    constructor(type, params = {}) {
+      super(type, params);
+      this.pointerId = params.pointerId ?? 1;
+      this.pointerType = params.pointerType ?? "mouse";
+      this.isPrimary = params.isPrimary ?? true;
+      this.width = params.width ?? 1;
+      this.height = params.height ?? 1;
+      this.pressure = params.pressure ?? 0;
+    }
+  }
+  window.PointerEvent = PointerEvent;
+  globalThis.PointerEvent = PointerEvent;
+}
