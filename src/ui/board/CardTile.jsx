@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare } from "lucide-react";
+import { ListChecks, MessageSquare } from "lucide-react";
 import { cardProgress } from "@/domain/card.js";
 import { AgentStatusBadge } from "@/ui/shared/AgentStatusBadge.jsx";
 import { LabelChip } from "@/ui/shared/LabelChip.jsx";
@@ -42,7 +42,11 @@ export function CardTile({ card, labels, onOpen, className, ref, ...rest }) {
         <div className="flex w-full items-center gap-3 text-xs text-muted-foreground">
           <AgentStatusBadge status={card.agentStatus} />
           {hasChecklists && (
-            <span className="ml-auto tabular-nums">
+            <span
+              className="ml-auto flex items-center gap-1 tabular-nums"
+              aria-label={`${progress.done} of ${progress.total} checklist items done`}
+            >
+              <ListChecks aria-hidden="true" className="size-3.5" />
               {progress.done}/{progress.total}
             </span>
           )}

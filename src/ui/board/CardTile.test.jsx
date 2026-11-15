@@ -71,3 +71,10 @@ test("hides the where-line without work", () => {
   render(<CardTile card={createCard({ id: "c1", number: 1, title: "Bare", now: T })} labels={labels} onOpen={vi.fn()} />);
   expect(screen.queryByText(/^(lima|worktree|host)$/)).not.toBeInTheDocument();
 });
+
+test("the checklist count carries an icon and a spoken label, like comments", () => {
+  render(<CardTile card={cardWithEverything()} labels={labels} onOpen={vi.fn()} />);
+  const count = screen.getByLabelText("1 of 3 checklist items done");
+  expect(count).toHaveTextContent("1/3");
+  expect(count.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+});
