@@ -13,7 +13,7 @@ import {
   ServiceNotFound,
 } from "./errors.js";
 import { assertMarkdownPath } from "./markdown-path.js";
-import { createService } from "./service.js";
+import { createService, sameServiceUrl } from "./service.js";
 import { requireNonEmpty } from "./text.js";
 import { assertWorkSession, createWork, withActivityStamp } from "./work.js";
 
@@ -108,7 +108,7 @@ const withServices = (card, services, now) => touch(card, { work: { ...card.work
 export function publishService(card, { id, title, url }, now) {
   if (!card.work) throw new NoActiveWork();
   const service = createService({ id, title, url });
-  if (card.work.services.some((s) => s.url === service.url)) throw new DuplicateService(service.url);
+  if (card.work.services.some((s) => sameServiceUrl(s.url, service.url))) throw new DuplicateService(service.url);
   return withServices(card, [...card.work.services, service], now);
 }
 

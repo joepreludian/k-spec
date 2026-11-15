@@ -56,3 +56,18 @@ test("service errors carry codes and messages", () => {
   expect(new DuplicateService("http://x.test")).toMatchObject({ code: "DUPLICATE_SERVICE", message: '"http://x.test" is already published' });
   expect(new ServiceNotFound("s9")).toMatchObject({ code: "SERVICE_NOT_FOUND" });
 });
+
+test.each([["http://lima-dev.local:3000/"], ["http://LIMA-DEV.local:3000"], ["HTTP://lima-dev.local:3000"]])(
+  "publishing %s again counts as the same service",
+  (url) => {
+    const c = publishService(working(), lima, T1);
+    expect(() => publishService(c, { id: "s2", url }, T1)).toThrow(DuplicateService);
+  },
+);
+
+test("a different path or port is a different service", () => {
+  let c = publishService(working(), lima, T1);
+  c = publishService(c, { id: "s2", url: "http://lima-dev.local:3000/docs" }, T1);
+  c = publishService(c, { id: "s3", url: "http://lima-dev.local:3001" }, T1);
+  expect(c.work.services).toHaveLength(3);
+});

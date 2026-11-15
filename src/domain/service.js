@@ -1,7 +1,7 @@
 import { InvalidLinkUrl } from "./errors.js";
 
 function parseHttpUrl(url) {
-  if (typeof url !== "string") throw new InvalidLinkUrl(url);
+  if (typeof url !== "string" || url !== url.trim()) throw new InvalidLinkUrl(url);
   let parsed;
   try {
     parsed = new URL(url);
@@ -23,3 +23,6 @@ export function createService({ id, title, url }) {
   const { host } = parseHttpUrl(url);
   return { id, title: typeof title === "string" && title.trim() ? title.trim() : host, url };
 }
+
+/** Two declared URLs name the same service when they parse to the same address (case, trailing slash). */
+export const sameServiceUrl = (a, b) => parseHttpUrl(a).href === parseHttpUrl(b).href;

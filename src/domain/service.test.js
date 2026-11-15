@@ -29,3 +29,10 @@ test.each([["javascript:alert(1)"], ["file:///etc/passwd"], ["/relative"], ["loc
 test("assertHttpUrl returns the url unchanged", () => {
   expect(assertHttpUrl("HTTP://Example.test:8080/a?b=1")).toBe("HTTP://Example.test:8080/a?b=1");
 });
+
+test.each([[" http://localhost:8002"], ["http://localhost:8002 "], ["\thttp://localhost:8002\n"]])(
+  "rejects a url with surrounding whitespace: %j",
+  (url) => {
+    expect(() => assertHttpUrl(url)).toThrow(InvalidLinkUrl);
+  },
+);
