@@ -1,8 +1,14 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 afterEach(() => cleanup());
+
+// No test reaches the network: components that check services or load files get a failed
+// request unless the test installs its own `global.fetch`.
+beforeEach(() => {
+  globalThis.fetch = vi.fn(() => Promise.reject(new TypeError("network is disabled in tests")));
+});
 
 // Polyfills Radix UI primitives expect in a browser but jsdom lacks.
 if (typeof globalThis.ResizeObserver === "undefined") {
