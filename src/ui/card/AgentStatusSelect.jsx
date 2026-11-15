@@ -2,8 +2,7 @@
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AGENT_STATUSES } from "@/domain/agent-status.js";
-import { AGENT_STATUS_DOT_CLASSES } from "@/ui/shared/AgentStatusBadge.jsx";
-import { cn } from "@/lib/utils";
+import { StatusDot } from "@/ui/shared/AgentStatusBadge.jsx";
 import { useBoard } from "@/ui/store/use-board.js";
 
 export const AGENT_STATUS_LABELS = Object.freeze({
@@ -24,7 +23,7 @@ export function AgentStatusSelect({ card }) {
         {AGENT_STATUSES.map((status) => (
           <SelectItem key={status} value={status}>
             <span className="flex items-center gap-2">
-              <span aria-hidden="true" className={cn("size-2 rounded-full", AGENT_STATUS_DOT_CLASSES[status])} />
+              <StatusDot status={status} />
               {AGENT_STATUS_LABELS[status]}
             </span>
           </SelectItem>

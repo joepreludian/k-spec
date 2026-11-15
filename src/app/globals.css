@@ -131,3 +131,23 @@
     @apply font-sans;
   }
 }
+/* Status dot animations (see AgentStatusBadge). Tiles add `motion-reduce:animate-none`. */
+@utility animate-blink {
+  animation: k-blink 1s steps(2, start) infinite;
+}
+@utility animate-ring {
+  animation: k-ring 1.2s ease-out infinite;
+}
+@keyframes k-blink {
+  to {
+    visibility: hidden;
+  }
+}
+@keyframes k-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(239 68 68 / 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 7px rgb(239 68 68 / 0);
+  }
+}
