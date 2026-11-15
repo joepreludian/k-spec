@@ -15,6 +15,9 @@ import {
   cardProgress,
   addLink,
   removeLink,
+  startWork,
+  updateWorkSession,
+  endWork,
 } from "./card.js";
 import { PERSON } from "./author.js";
 import {
@@ -28,6 +31,7 @@ import {
   InvalidLinkPath,
   DuplicateLink,
   LinkNotFound,
+  NoActiveWork,
 } from "./errors.js";
 
 const T0 = "2026-11-14T10:00:00.000Z";
@@ -54,6 +58,9 @@ test("createCard sets defaults", () => {
     checklists: [],
     comments: [],
     links: [],
+    work: null,
+    workHistory: [],
+    events: [],
     createdAt: T0,
     updatedAt: T0,
   });
@@ -184,4 +191,58 @@ test("removeLink removes or throws LinkNotFound", () => {
   expect(removeLink(c, "l1", T1).links).toEqual([]);
   expect(removeLink(c, "l1", T1).updatedAt).toBe(T1);
   expect(() => removeLink(c, "nope", T1)).toThrow(LinkNotFound);
+});
+
+const loc = { kind: "lima", name: "lima-dev-k-spec-watcher" };
+const session = {
+  id: "s1",
+  model: "claude-fable-5-1",
+  tokens: { input: 10, output: 2, cached: 3 },
+  turns: 1,
+  lastTool: null,
+  lastActivityAt: T0,
+};
+
+test("startWork sets work and records an event", () => {
+  const c = startWork(base(), { location: loc, branch: "feat/x" }, T1);
+  expect(c.work).toEqual({ location: loc, branch: "feat/x", worktreePath: null, startedAt: T1, session: null });
+  expect(c.events).toEqual([{ type: "work-started", location: loc, branch: "feat/x", at: T1 }]);
+  expect(c.updatedAt).toBe(T1);
+});
+
+test("startWork over active work archives it with endedAt and two events", () => {
+  const first = startWork(base(), { location: { kind: "host", name: "mbp" }, branch: "main" }, T0);
+  const c = startWork(first, { location: loc, branch: "feat/x" }, T1);
+  expect(c.workHistory).toEqual([{ ...first.work, endedAt: T1 }]);
+  expect(c.events.map((e) => e.type)).toEqual(["work-started", "work-ended", "work-started"]);
+  expect(c.events[1]).toEqual({ type: "work-ended", location: { kind: "host", name: "mbp" }, branch: "main", at: T1 });
+});
+
+test("updateWorkSession replaces the session, defaults lastActivityAt, and does not touch updatedAt or events", () => {
+  const active = startWork(base(), { location: loc, branch: "feat/x" }, T0);
+  const { lastActivityAt: _omit, ...noStamp } = session;
+  const c = updateWorkSession(active, noStamp, T1);
+  expect(c.work.session).toEqual({ ...noStamp, lastActivityAt: T1 });
+  expect(c.updatedAt).toBe(T0);
+  expect(c.events).toHaveLength(1);
+  expect(updateWorkSession(active, session, T1).work.session.lastActivityAt).toBe(T0);
+});
+
+test("updateWorkSession and endWork require active work", () => {
+  expect(() => updateWorkSession(base(), session, T0)).toThrow(NoActiveWork);
+  expect(() => endWork(base(), T0)).toThrow(NoActiveWork);
+});
+
+test("endWork archives and records the event", () => {
+  const c = endWork(startWork(base(), { location: loc, branch: "feat/x" }, T0), T1);
+  expect(c.work).toBeNull();
+  expect(c.workHistory[0]).toMatchObject({ branch: "feat/x", startedAt: T0, endedAt: T1 });
+  expect(c.events.at(-1)).toEqual({ type: "work-ended", location: loc, branch: "feat/x", at: T1 });
+  expect(c.updatedAt).toBe(T1);
+});
+
+test("setAgentStatus records a status-changed event only when the status changes", () => {
+  const c = setAgentStatus(base(), "working", T1);
+  expect(c.events).toEqual([{ type: "status-changed", from: "idle", to: "working", at: T1 }]);
+  expect(setAgentStatus(c, "working", T1).events).toHaveLength(1);
 });

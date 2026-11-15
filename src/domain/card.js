@@ -8,9 +8,11 @@ import {
   EmptyTitle,
   InvalidCardNumber,
   LinkNotFound,
+  NoActiveWork,
 } from "./errors.js";
 import { assertMarkdownPath } from "./markdown-path.js";
 import { requireNonEmpty } from "./text.js";
+import { assertWorkSession, createWork } from "./work.js";
 
 function assertCardNumber(number) {
   if (!Number.isInteger(number) || number < 1) throw new InvalidCardNumber();
@@ -28,6 +30,9 @@ export function createCard({ id, number, title, now }) {
     checklists: [],
     comments: [],
     links: [],
+    work: null,
+    workHistory: [],
+    events: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -52,8 +57,49 @@ export function removeLabelFromCard(card, labelId, now) {
   return touch(card, { labelIds: card.labelIds.filter((id) => id !== labelId) }, now);
 }
 
+const withEvent = (card, event) => ({ ...card, events: [...card.events, event] });
+
 export function setAgentStatus(card, status, now) {
-  return touch(card, { agentStatus: assertAgentStatus(status) }, now);
+  const next = assertAgentStatus(status);
+  const changed = next !== card.agentStatus;
+  const updated = touch(card, { agentStatus: next }, now);
+  return changed
+    ? withEvent(updated, { type: "status-changed", from: card.agentStatus, to: next, at: now })
+    : updated;
+}
+
+// --- work ----------------------------------------------------------------
+
+const workEvent = (type, work, at) => ({ type, location: work.location, branch: work.branch, at });
+
+/** Moves the active work block into history (no updatedAt change; callers touch). */
+function archiveWork(card, now) {
+  if (!card.work) return card;
+  return withEvent(
+    { ...card, work: null, workHistory: [...card.workHistory, { ...card.work, endedAt: now }] },
+    workEvent("work-ended", card.work, now),
+  );
+}
+
+export function startWork(card, { location, branch, worktreePath, session }, now) {
+  const work = createWork({ location, branch, worktreePath, session, now });
+  const archived = archiveWork(card, now);
+  return withEvent(touch(archived, { work }, now), workEvent("work-started", work, now));
+}
+
+/** Replaces the session block. Deliberately does not bump updatedAt or add an event (token ticks). */
+export function updateWorkSession(card, session, now) {
+  if (!card.work) throw new NoActiveWork();
+  const clean = assertWorkSession(session);
+  return {
+    ...card,
+    work: { ...card.work, session: { ...clean, lastActivityAt: clean.lastActivityAt ?? now } },
+  };
+}
+
+export function endWork(card, now) {
+  if (!card.work) throw new NoActiveWork();
+  return touch(archiveWork(card, now), {}, now);
 }
 
 export function addChecklist(card, { id, title }, now) {

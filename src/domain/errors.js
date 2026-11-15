@@ -110,3 +110,26 @@ export class LinkNotFound extends DomainError {
     super(describe("Link", "not found")(id), "LINK_NOT_FOUND");
   }
 }
+export class InvalidWorkLocation extends DomainError {
+  constructor(kind) {
+    super(
+      kind
+        ? `"${kind}" is not a valid work location (lima, worktree, host)`
+        : "Work location must be lima, worktree or host",
+      "INVALID_WORK_LOCATION",
+    );
+  }
+}
+export class InvalidWorkSession extends DomainError {
+  constructor() {
+    super(
+      "Work session must have an id, a model, non-negative token counts and turns",
+      "INVALID_WORK_SESSION",
+    );
+  }
+}
+export class NoActiveWork extends DomainError {
+  constructor() {
+    super("This card is not being worked on", "NO_ACTIVE_WORK");
+  }
+}
