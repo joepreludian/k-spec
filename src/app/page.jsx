@@ -1,7 +1,5 @@
+import { BoardApp } from "@/ui/board/BoardApp.jsx";
+
 export default function Page() {
-  return (
-    <main className="p-6">
-      <h1 className="text-xl font-semibold">k-spec</h1>
-    </main>
-  );
+  return <BoardApp />;
 }
