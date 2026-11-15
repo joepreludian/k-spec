@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# k-spec
 
-## Getting Started
+A Trello-style kanban board built for working with AI agents. You hand work to agents as cards and talk to them on the card: the description is the spec, checklists define "done", comments are the back-and-forth, and an agent status tag (idle, working, waiting for input, blocked) shows where each card stands. The board will be mirrored to files under a project's `docs/k-spec` folder, served from a Docker container, and driven by a CLI so agents can manage it themselves.
 
-First, run the development server:
+**Current slice:** the web UI on an in-memory store with seed data, behind a token-link access gate. Nothing persists yet; reloading resets to the seed.
+
+## Running
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The server prints an access link on start:
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+```
+  k-spec board: http://localhost:3000/?token=…
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open that link once; it sets a cookie and you land on the board. Anyone hitting the board without the cookie is sent to `/access` and asked for the token. Set `K_SPEC_TOKEN` to fix the token instead of generating one per start, and `K_SPEC_HOST` to change the host shown in the link (useful over LAN, Tailscale, or a DNS name).
 
-## Learn More
+## Testing
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm test          # vitest, whole suite once
+npm run test:watch
+npm run lint
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Development is test-first: every domain rule, use case, and UI interaction has a test that was written before the code.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Layout
 
-## Deploy on Vercel
+Domain-driven, in layers under `src/`: `domain` (pure data and rules), `application` (use cases and the command registry), `infrastructure` (in-memory repository, seed, access token), `ui` (React components and the board context store), `app` (Next.js entry). See `CLAUDE.md` for the layer rules and conventions.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Roadmap
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Board UI** on an in-memory store with the token gate. *(this slice)*
+2. **File-backed store**: lanes as folders and cards as markdown with frontmatter under `docs/k-spec`, with a file watcher pushing changes to the UI.
+3. **API and CLI**: Next.js route handlers exposing the same commands, a `k-spec-cli` that calls them with the same token, and a Dockerfile plus compose service that prints the access link.
+4. **Claude integration** that watches the board and works tickets.
