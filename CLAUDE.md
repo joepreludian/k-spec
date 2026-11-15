@@ -46,11 +46,13 @@ npm run test:watch   # vitest in watch mode
 npm run lint         # eslint (next config)
 npm run build        # production build
 K_SPEC_TOKEN=mytoken npm run dev   # fix the access token instead of a generated one
-K_SPEC_HOST=my-host npm run dev    # host name used in the printed access link
+K_SPEC_HOST=my-host npm run dev    # host name used in the printed access link; also allow-listed for dev HMR
 K_SPEC_PROJECT_DIR=/path npm run dev   # directory the markdown viewer reads from (default: cwd)
 ```
 
 The server prints `k-spec board: http://<host>:<port>/?token=…` on start. Opening that link sets the `k-spec-token` cookie; without it every page redirects to `/access`. The gate lives in `src/proxy.js` and `src/infrastructure/access/`.
+
+When the browser reaches the dev server through any host other than `localhost` (a LAN name, a Lima/VM host name), set `K_SPEC_HOST` to that host. `next.config.mjs` passes it to `allowedDevOrigins`; otherwise Next rejects the hot-reload websocket and the Turbopack dev client never hydrates, so the board renders but nothing responds to clicks. Plain-http pages on such hosts are not secure contexts, so ids come from `createIdGenerator` (`src/infrastructure/id-generator.js`), which falls back to `getRandomValues` when `crypto.randomUUID` is missing.
 
 The file viewer (`/api/files/<path>`, `/files/<path>`, the README sheet, the card Spec tab) serves only `.md`/`.markdown` files inside `K_SPEC_PROJECT_DIR`, capped at 1 MiB, behind the same token; the path rule is `src/domain/markdown-path.js` and the resolver is `src/infrastructure/files/`.
 
