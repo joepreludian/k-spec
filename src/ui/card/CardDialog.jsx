@@ -15,6 +15,7 @@ import { LabelChip } from "@/ui/shared/LabelChip.jsx";
 import { WhereLine } from "@/ui/shared/WhereLine.jsx";
 import { relativeTime } from "@/ui/shared/relative-time.js";
 import { useBoard } from "@/ui/store/use-board.js";
+import { ActivityTab } from "./ActivityTab.jsx";
 import { AgentStatusSelect } from "./AgentStatusSelect.jsx";
 import { CardDialogContent } from "./CardDialogContent.jsx";
 import { DeleteCardButton } from "./DeleteCardButton.jsx";
@@ -95,7 +96,7 @@ export function CardDialog({ cardId, onClose }) {
               <ExecutionTab card={card} />
             </TabsContent>
             <TabsContent value="activity" className="min-h-0 flex-1 overflow-y-auto pr-1">
-              <p className="text-sm text-muted-foreground">Coming next</p>
+              <ActivityTab card={card} />
             </TabsContent>
           </Tabs>
 
