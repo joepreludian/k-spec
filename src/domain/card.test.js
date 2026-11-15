@@ -13,6 +13,7 @@ import {
   addComment,
   checklistProgress,
   cardProgress,
+  checklistSummaries,
   addLink,
   removeLink,
   startWork,
@@ -245,4 +246,13 @@ test("setAgentStatus records a status-changed event only when the status changes
   const c = setAgentStatus(base(), "working", T1);
   expect(c.events).toEqual([{ type: "status-changed", from: "idle", to: "working", at: T1 }]);
   expect(setAgentStatus(c, "working", T1).events).toHaveLength(1);
+});
+
+test("checklistSummaries lists each checklist's progress in order", () => {
+  const c = addChecklistItem(addChecklist(withItems(), { id: "k2", title: "Steps" }, T0), "k2", { id: "i3", text: "x" }, T0);
+  expect(checklistSummaries(toggleChecklistItem(c, "k2", "i3", T0))).toEqual([
+    { id: "k1", title: "Acceptance", done: 0, total: 2 },
+    { id: "k2", title: "Steps", done: 1, total: 1 },
+  ]);
+  expect(checklistSummaries(base())).toEqual([]);
 });

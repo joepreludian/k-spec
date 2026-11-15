@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CardTile } from "./CardTile.jsx";
-import { createCard, addChecklist, addChecklistItem, toggleChecklistItem, addComment, setAgentStatus, addLabelToCard } from "@/domain/card.js";
+import { createCard, addChecklist, addChecklistItem, toggleChecklistItem, addComment, setAgentStatus, addLabelToCard, startWork } from "@/domain/card.js";
 import { PERSON } from "@/domain/author.js";
 
 const T = "2026-11-14T10:00:00.000Z";
@@ -11,7 +11,8 @@ const labels = [
 ];
 
 function cardWithEverything() {
-  let c = createCard({ id: "c1", number: 1, title: "File watcher", now: T });
+  let c = createCard({ id: "c1", number: 3, title: "File watcher", now: T });
+  c = startWork(c, { location: { kind: "lima", name: "lima-dev" }, branch: "feat/watcher" }, T);
   c = addLabelToCard(c, "l1", T);
   c = addLabelToCard(c, "missing", T);
   c = setAgentStatus(c, "working", T);
@@ -46,4 +47,27 @@ test("clicking the tile calls onOpen with the card id", async () => {
   render(<CardTile card={createCard({ id: "c1", number: 1, title: "Bare", now: T })} labels={labels} onOpen={onOpen} />);
   await userEvent.click(screen.getByRole("button", { name: /Bare/ }));
   expect(onOpen).toHaveBeenCalledWith("c1");
+});
+
+test("shows #number before the title and labels after it", () => {
+  render(<CardTile card={cardWithEverything()} labels={labels} onOpen={vi.fn()} />);
+  const number = screen.getByText("#3");
+  const title = screen.getByText("File watcher");
+  const label = screen.getByText("bug");
+  expect(number.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(title.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole("button", { name: /#3 File watcher/ })).toBeInTheDocument();
+});
+
+test("shows where the card is being worked and the total progress", () => {
+  render(<CardTile card={cardWithEverything()} labels={labels} onOpen={vi.fn()} />);
+  expect(screen.getByText("lima")).toHaveAttribute("title", "lima-dev");
+  expect(screen.getByText("feat/watcher")).toBeInTheDocument();
+  expect(screen.getByText("1/3")).toBeInTheDocument();
+  expect(screen.getByLabelText("Steps 1/3")).toBeInTheDocument();
+});
+
+test("hides the where-line without work", () => {
+  render(<CardTile card={createCard({ id: "c1", number: 1, title: "Bare", now: T })} labels={labels} onOpen={vi.fn()} />);
+  expect(screen.queryByText(/^(lima|worktree|host)$/)).not.toBeInTheDocument();
 });

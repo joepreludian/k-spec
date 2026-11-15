@@ -204,6 +204,11 @@ export function checklistProgress(checklist) {
   };
 }
 
+/** One `{ id, title, done, total }` per checklist, in order. */
+export function checklistSummaries(card) {
+  return card.checklists.map((k) => ({ id: k.id, title: k.title, ...checklistProgress(k) }));
+}
+
 export function cardProgress(card) {
   return card.checklists.reduce(
     (acc, k) => {
