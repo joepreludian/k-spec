@@ -3,10 +3,13 @@ import { createAuthor } from "./author.js";
 import {
   ChecklistItemNotFound,
   ChecklistNotFound,
+  DuplicateLink,
   EmptyText,
   EmptyTitle,
   InvalidCardNumber,
+  LinkNotFound,
 } from "./errors.js";
+import { assertMarkdownPath } from "./markdown-path.js";
 import { requireNonEmpty } from "./text.js";
 
 function assertCardNumber(number) {
@@ -24,6 +27,7 @@ export function createCard({ id, number, title, now }) {
     agentStatus: DEFAULT_AGENT_STATUS,
     checklists: [],
     comments: [],
+    links: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -133,6 +137,18 @@ export function addComment(card, { id, author, body }, now) {
     createdAt: now,
   };
   return touch(card, { comments: [...card.comments, comment] }, now);
+}
+
+export function addLink(card, { id, title, path }, now) {
+  const cleanPath = assertMarkdownPath(path);
+  if (card.links.some((l) => l.path === cleanPath)) throw new DuplicateLink(cleanPath);
+  const link = { id, title: requireNonEmpty(title, EmptyTitle), path: cleanPath };
+  return touch(card, { links: [...card.links, link] }, now);
+}
+
+export function removeLink(card, linkId, now) {
+  if (!card.links.some((l) => l.id === linkId)) throw new LinkNotFound(linkId);
+  return touch(card, { links: card.links.filter((l) => l.id !== linkId) }, now);
 }
 
 export function checklistProgress(checklist) {

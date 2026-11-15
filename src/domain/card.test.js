@@ -13,6 +13,8 @@ import {
   addComment,
   checklistProgress,
   cardProgress,
+  addLink,
+  removeLink,
 } from "./card.js";
 import { PERSON } from "./author.js";
 import {
@@ -23,6 +25,9 @@ import {
   ChecklistNotFound,
   ChecklistItemNotFound,
   InvalidCardNumber,
+  InvalidLinkPath,
+  DuplicateLink,
+  LinkNotFound,
 } from "./errors.js";
 
 const T0 = "2026-11-14T10:00:00.000Z";
@@ -48,6 +53,7 @@ test("createCard sets defaults", () => {
     agentStatus: "idle",
     checklists: [],
     comments: [],
+    links: [],
     createdAt: T0,
     updatedAt: T0,
   });
@@ -158,4 +164,24 @@ test("addComment validates body and author", () => {
   expect(() =>
     addComment(base(), { id: "m", author: { kind: "bot", name: "x" }, body: "hi" }, T1),
   ).toThrow(InvalidAuthor);
+});
+
+test("addLink appends and bumps updatedAt", () => {
+  const c = addLink(base(), { id: "l1", title: " Design ", path: "docs/a.md" }, T1);
+  expect(c.links).toEqual([{ id: "l1", title: "Design", path: "docs/a.md" }]);
+  expect(c.updatedAt).toBe(T1);
+});
+
+test("addLink rejects empty title, bad path and duplicate path", () => {
+  const c = addLink(base(), { id: "l1", title: "Design", path: "docs/a.md" }, T0);
+  expect(() => addLink(c, { id: "l2", title: " ", path: "docs/b.md" }, T0)).toThrow(EmptyTitle);
+  expect(() => addLink(c, { id: "l2", title: "x", path: "../b.md" }, T0)).toThrow(InvalidLinkPath);
+  expect(() => addLink(c, { id: "l2", title: "x", path: "docs/a.md" }, T0)).toThrow(DuplicateLink);
+});
+
+test("removeLink removes or throws LinkNotFound", () => {
+  const c = addLink(base(), { id: "l1", title: "Design", path: "docs/a.md" }, T0);
+  expect(removeLink(c, "l1", T1).links).toEqual([]);
+  expect(removeLink(c, "l1", T1).updatedAt).toBe(T1);
+  expect(() => removeLink(c, "nope", T1)).toThrow(LinkNotFound);
 });

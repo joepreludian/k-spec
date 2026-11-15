@@ -90,3 +90,23 @@ export class InvalidCardNumber extends DomainError {
     super("Card number must be a positive integer", "INVALID_CARD_NUMBER");
   }
 }
+export class InvalidLinkPath extends DomainError {
+  constructor(path) {
+    super(
+      typeof path === "string" && path.trim()
+        ? `"${path.trim()}" is not a relative markdown file path`
+        : "A link needs a relative markdown file path",
+      "INVALID_LINK_PATH",
+    );
+  }
+}
+export class DuplicateLink extends DomainError {
+  constructor(path) {
+    super(path ? `"${path}" is already linked` : "That file is already linked", "DUPLICATE_LINK");
+  }
+}
+export class LinkNotFound extends DomainError {
+  constructor(id) {
+    super(describe("Link", "not found")(id), "LINK_NOT_FOUND");
+  }
+}
