@@ -9,8 +9,8 @@ import { AddLinkForm } from "./AddLinkForm.jsx";
 const TILE =
   "flex w-full flex-col items-center gap-1.5 rounded-md px-1 py-2 text-center text-xs hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-/** The card's linked files as a flat icon grid, ending with an "Add link" tile. */
-export function SpecFileGrid({ card, onOpen }) {
+/** The card's linked files as a flat icon grid, ending with an "Add link" tile. `focusId` names the tile focused on mount. */
+export function SpecFileGrid({ card, onOpen, focusId = null }) {
   const { dispatch } = useBoard();
   const [adding, setAdding] = useState(false);
 
@@ -19,7 +19,13 @@ export function SpecFileGrid({ card, onOpen }) {
       <div className="grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] items-start gap-2">
         {card.links.map((link) => (
           <div key={link.id} className="group relative">
-            <button type="button" title={link.path} onClick={() => onOpen(link.id)} className={TILE}>
+            <button
+              type="button"
+              title={link.path}
+              autoFocus={link.id === focusId}
+              onClick={() => onOpen(link.id)}
+              className={TILE}
+            >
               <FileText aria-hidden="true" strokeWidth={1.25} className="size-10 text-muted-foreground" />
               <span className="line-clamp-2 w-full break-words">{link.title}</span>
             </button>

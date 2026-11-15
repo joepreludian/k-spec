@@ -121,3 +121,20 @@ test("links inside a rendered spec open in a new tab so the board is not lost", 
   expect(link).toHaveAttribute("href", "/files/docs/specs/2026-11-14-k-spec-board-ui-plan.md");
   expect(link).toHaveAttribute("target", "_blank");
 });
+
+test("opening a tile with the keyboard moves focus to Files", async () => {
+  global.fetch = okFetch("# Plan doc");
+  renderWithBoard(<SpecTab card={card3} />, board);
+  screen.getByRole("button", { name: "Board UI plan" }).focus();
+  await userEvent.keyboard("{Enter}");
+  expect(screen.getByRole("button", { name: "Files" })).toHaveFocus();
+});
+
+test("going back returns focus to the tile that was open", async () => {
+  global.fetch = okFetch("# Plan doc");
+  renderWithBoard(<SpecTab card={card3} />, board);
+  screen.getByRole("button", { name: "Board UI plan" }).focus();
+  await userEvent.keyboard("{Enter}");
+  await userEvent.keyboard("{Enter}");
+  expect(screen.getByRole("button", { name: "Board UI plan" })).toHaveFocus();
+});

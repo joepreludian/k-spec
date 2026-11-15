@@ -10,7 +10,7 @@ export function SpecDocument({ link, onBack }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b pb-2">
-        <Button variant="ghost" size="sm" onClick={onBack}>
+        <Button autoFocus variant="ghost" size="sm" onClick={onBack}>
           <ArrowLeft aria-hidden="true" data-icon="inline-start" />
           Files
         </Button>
