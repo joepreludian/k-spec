@@ -1,0 +1,12 @@
+title: Project scaffold and CLAUDE.md
+description: Next.js 16, Tailwind 4, shadcn in JSX mode, Vitest. DDD layers under `src/`.
+labels:
+  - infra
+comments:
+  - author:
+      kind: agent
+      name: claude
+    at: 2026-11-11T11:00:00.000Z
+    body: Scaffold is in. Lint, tests and build are green.
+created_at: 2026-11-11T09:00:00.000Z
+updated_at: 2026-11-11T11:00:00.000Z

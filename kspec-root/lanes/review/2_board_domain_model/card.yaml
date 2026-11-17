@@ -1,0 +1,48 @@
+title: Board domain model
+description: |-
+  Board aggregate with lanes, cards, board-level label catalogue.
+
+  - immutable updates
+  - ISO timestamps
+labels:
+  - spec
+agent_status: waiting-for-input
+checklists:
+  - title: Acceptance
+    items:
+      - text: moveCard clamps positions
+        done: true
+      - text: deleteLabel detaches from cards
+        done: true
+      - text: round-trips to frontmatter
+        done: false
+comments:
+  - author:
+      kind: person
+      name: You
+    at: 2026-11-13T03:00:00.000Z
+    body: Should removing a non-empty lane move its cards somewhere, or fail?
+  - author:
+      kind: agent
+      name: claude
+    at: 2026-11-13T04:00:00.000Z
+    body: I made it fail with LaneNotEmpty so nothing moves silently. Want the auto-move instead?
+work:
+  location:
+    kind: host
+    name: jon-mbp
+  branch: main
+  started_at: 2026-11-13T02:00:00.000Z
+events:
+  - type: status-changed
+    from: idle
+    to: waiting-for-input
+    at: 2026-11-11T22:00:00.000Z
+  - type: work-started
+    location:
+      kind: host
+      name: jon-mbp
+    branch: main
+    at: 2026-11-13T02:00:00.000Z
+created_at: 2026-11-11T21:00:00.000Z
+updated_at: 2026-11-11T22:00:00.000Z
