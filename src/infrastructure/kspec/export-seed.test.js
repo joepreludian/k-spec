@@ -42,6 +42,14 @@ test("refuses a folder that already has content and leaves it alone", async () =
 
 test("force replaces the folder's content", async () => {
   await fs.writeFile(path.join(tmp, "stray.txt"), "old");
+  await fs.writeFile(path.join(tmp, "board.yaml"), "name: Old\n");
   await writeFiles(tmp, { "board.yaml": "name: X\n" }, { force: true });
   expect(await fs.readdir(tmp)).toEqual(["board.yaml"]);
+});
+
+test("force only replaces a folder that is a kspec root", async () => {
+  await fs.writeFile(path.join(tmp, "precious.txt"), "not a board");
+  await fs.mkdir(path.join(tmp, "src"));
+  await expect(writeFiles(tmp, { "board.yaml": "name: X\n" }, { force: true })).rejects.toThrow(/does not look like a kspec root/);
+  expect((await fs.readdir(tmp)).sort()).toEqual(["precious.txt", "src"]);
 });

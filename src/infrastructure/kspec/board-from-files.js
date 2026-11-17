@@ -18,7 +18,29 @@ import {
 } from "./format.js";
 
 const isPlainObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
-const list = (v) => (Array.isArray(v) ? v : []);
+const absent = (v) => v === undefined || v === null;
+
+/** A value of the wrong type is an error, never a silent default (which would drop data). */
+const wrongShape = (key, expected) => new DomainError(`\`${key}\` must be ${expected}`);
+
+function list(value, key) {
+  if (absent(value)) return [];
+  if (!Array.isArray(value)) throw wrongShape(key, "a list");
+  return value;
+}
+
+function mapping(value, key) {
+  if (!isPlainObject(value)) throw wrongShape(key, "a mapping of keys to values");
+  return value;
+}
+
+const mappings = (value, key) => list(value, key).map((entry) => mapping(entry, `${key} entry`));
+
+function optional(value, key, type) {
+  if (absent(value)) return undefined;
+  if (typeof value !== type) throw wrongShape(key, `a ${type}`);
+  return value;
+}
 const text = (v, fallback) => (typeof v === "string" && v ? v : fallback);
 
 /** Parses one YAML file that must hold a mapping (an empty file counts as an empty mapping). */
@@ -49,15 +71,22 @@ function readBoardFile(source) {
   const raw = source === null ? {} : parseMapping(source, file);
   return inFile(file, () => {
     let board = createBoard({ id: "board-1", name: text(raw.name, "k-spec") });
-    if (isPlainObject(raw.project)) {
+    if (!absent(raw.project)) {
+      const project = mapping(raw.project, "project");
       board = setProject(board, {
-        name: raw.project.name,
-        links: list(raw.project.links).map((l, i) => ({ id: `project-link-${i + 1}`, title: l?.title, url: l?.url })),
-        readmePath: raw.project.readme ?? null,
+        name: project.name,
+        links: mappings(project.links, "project.links").map((l, i) => ({ id: `project-link-${i + 1}`, title: l.title, url: l.url })),
+        readmePath: project.readme ?? null,
       });
     }
-    for (const label of list(raw.labels)) {
-      board = createLabel(board, { id: `label-${slugify(label?.name ?? "")}`, name: label?.name, color: label?.color });
+    for (const label of mappings(raw.labels, "labels")) {
+      const slug = slugify(optional(label.name, "labels name", "string") ?? "");
+      const clash = board.labels.find((l) => l.id === `label-${slug}`);
+      if (clash) throw new DomainError(`Labels "${clash.name}" and "${label.name}" are too alike to tell apart`);
+      if (label.name?.trim() && !slug) {
+        throw new DomainError(`Label "${label.name}" needs at least one letter or digit (a-z, 0-9)`);
+      }
+      board = createLabel(board, { id: `label-${slug}`, name: label.name, color: label.color });
     }
     return { board, counter: Number.isInteger(raw.next_card_number) ? raw.next_card_number : 1 };
   });
@@ -73,7 +102,7 @@ function readOrder(source, file) {
 }
 
 function buildWork(raw, { idPrefix, fallbackAt }) {
-  const input = toCamel(raw);
+  const input = toCamel(mapping(raw, "work"));
   const startedAt = text(input?.startedAt, fallbackAt);
   const work = createWork({
     location: input?.location,
@@ -82,10 +111,30 @@ function buildWork(raw, { idPrefix, fallbackAt }) {
     session: input?.session ?? null,
     now: startedAt,
   });
-  const services = list(input.services).map((s, i) =>
-    createService({ id: `${idPrefix}-service-${i + 1}`, title: s?.title, url: s?.url }),
+  const services = mappings(input.services, "services").map((s, i) =>
+    createService({ id: `${idPrefix}-service-${i + 1}`, title: s.title, url: s.url }),
   );
   return { ...work, services };
+}
+
+const WORK_EVENTS = ["work-started", "work-ended"];
+
+/** Activity entries are rendered as they are, so each one is checked here. */
+function buildEvent(raw) {
+  const event = toCamel(mapping(raw, "events entry"));
+  if (typeof event.at !== "string") throw wrongShape("events at", "a timestamp");
+  if (event.type === "status-changed") {
+    assertAgentStatus(event.to);
+    if (typeof event.from !== "string") throw wrongShape("events from", "a status");
+  } else if (WORK_EVENTS.includes(event.type)) {
+    const location = mapping(event.location, "events location");
+    if (typeof location.kind !== "string" || typeof location.name !== "string" || typeof event.branch !== "string") {
+      throw new DomainError(`A ${event.type} event needs a location (kind, name) and a branch`);
+    }
+  } else {
+    throw new DomainError(`Unknown event type "${event.type}"`);
+  }
+  return event;
 }
 
 function buildCard({ number, raw, modifiedAt, files, labelIdByName }) {
@@ -97,30 +146,31 @@ function buildCard({ number, raw, modifiedAt, files, labelIdByName }) {
   const updatedAt = text(raw.updated_at, modifiedAt);
   const base = createCard({ id, number, title: raw.title, now: createdAt });
 
-  const labelIds = list(raw.labels).map((name) => {
-    const labelId = labelIdByName.get(String(name).toLowerCase());
+  const labelIds = list(raw.labels, "labels").map((name) => {
+    if (typeof name !== "string") throw wrongShape("labels", "a list of label names");
+    const labelId = labelIdByName.get(name.toLowerCase());
     if (!labelId) throw new DomainError(`Label "${name}" is not defined in board.yaml`);
     return labelId;
   });
 
-  const checklists = list(raw.checklists).map((k, ki) => {
+  const checklists = mappings(raw.checklists, "checklists").map((k, ki) => {
     const checklistId = `${id}-checklist-${ki + 1}`;
     return {
       id: checklistId,
-      title: requireNonEmpty(k?.title, EmptyTitle),
-      items: list(k?.items).map((item, ii) => ({
+      title: requireNonEmpty(k.title, EmptyTitle),
+      items: mappings(k.items, "checklist items").map((item, ii) => ({
         id: `${checklistId}-item-${ii + 1}`,
-        text: requireNonEmpty(item?.text, EmptyText),
-        done: item?.done === true,
+        text: requireNonEmpty(item.text, EmptyText),
+        done: optional(item.done, "done", "boolean") ?? false,
       })),
     };
   });
 
-  const comments = list(raw.comments).map((c, i) => ({
+  const comments = mappings(raw.comments, "comments").map((c, i) => ({
     id: `${id}-comment-${i + 1}`,
-    author: { ...createAuthor(c?.author) },
-    body: requireNonEmpty(c?.body, EmptyText),
-    createdAt: text(c?.at, updatedAt),
+    author: { ...createAuthor(c.author) },
+    body: requireNonEmpty(c.body, EmptyText),
+    createdAt: text(c.at, updatedAt),
   }));
 
   const links = files
@@ -134,18 +184,18 @@ function buildCard({ number, raw, modifiedAt, files, labelIdByName }) {
 
   return {
     ...base,
-    description: typeof raw.description === "string" ? raw.description : "",
+    description: optional(raw.description, "description", "string") ?? "",
     labelIds,
     agentStatus: assertAgentStatus(raw.agent_status ?? DEFAULT_AGENT_STATUS),
     checklists,
     comments,
     links,
-    work: isPlainObject(raw.work) ? buildWork(raw.work, { idPrefix: id, fallbackAt: updatedAt }) : null,
-    workHistory: list(raw.work_history).map((w, i) => ({
+    work: absent(raw.work) ? null : buildWork(raw.work, { idPrefix: id, fallbackAt: updatedAt }),
+    workHistory: list(raw.work_history, "work_history").map((w, i) => ({
       ...buildWork(w, { idPrefix: `${id}-history-${i + 1}`, fallbackAt: createdAt }),
       endedAt: text(w?.ended_at, updatedAt),
     })),
-    events: list(raw.events).map(toCamel),
+    events: list(raw.events, "events").map(buildEvent),
     updatedAt,
   };
 }

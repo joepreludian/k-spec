@@ -1,7 +1,7 @@
 import path from "node:path";
 import { assertMarkdownPath } from "@/domain/markdown-path.js";
 import { readProjectFile } from "../files/read-project-file.js";
-import { CARD_FILE_PREFIX, cardNumberOf } from "./format.js";
+import { CARD_FILE_PREFIX, LANES, cardNumberOf } from "./format.js";
 
 const fail = (status, error) => ({ status, body: { error } });
 
@@ -18,34 +18,48 @@ function parseCardFilePath(requested) {
   return { number: Number(number), name };
 }
 
-/** The card's folder, wherever the card currently is: lanes are scanned for its number. */
+const missing = (error) => error?.code === "ENOENT" || error?.code === "ENOTDIR";
+
+/** The card's folder, wherever the card currently is: the fixed lanes are scanned for its number. */
 async function findCardDir(rootDir, number, fs) {
-  const lanesDir = path.join(rootDir, "lanes");
-  let lanes;
-  try {
-    lanes = await fs.readdir(lanesDir, { withFileTypes: true });
-  } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
-    throw error;
-  }
-  for (const lane of lanes.filter((e) => e.isDirectory())) {
-    const children = await fs.readdir(path.join(lanesDir, lane.name), { withFileTypes: true });
+  for (const { folder } of LANES) {
+    const laneDir = path.join(rootDir, "lanes", folder);
+    let children;
+    try {
+      children = await fs.readdir(laneDir, { withFileTypes: true });
+    } catch (error) {
+      if (missing(error)) continue;
+      throw error;
+    }
     const match = children.find((e) => e.isDirectory() && cardNumberOf(e.name) === number);
-    if (match) return path.join(lanesDir, lane.name, match.name);
+    if (match) return path.join(laneDir, match.name);
   }
   return null;
+}
+
+/** True when `name`, with symlinks resolved, is still a file inside the card's own `files/` folder. */
+async function staysInside(cardDir, name, fs) {
+  try {
+    const filesDir = path.join(await fs.realpath(cardDir), "files");
+    const target = await fs.realpath(path.join(cardDir, "files", name));
+    return target.startsWith(filesDir + path.sep);
+  } catch (error) {
+    if (missing(error)) return true; // nothing there: the read below answers 404
+    throw error;
+  }
 }
 
 /**
  * Reads one markdown file from a card's `files/` folder. `path` is the link path
  * `kspec-cards/<number>/<file>`; the card is found by number, so the address survives a move
- * to another lane. Same result shape and limits as `readProjectFile`.
+ * to another lane. Symlinks that lead out of that folder are refused. Same result shape and limits as `readProjectFile`.
  */
 export async function readCardFile({ rootDir, path: requested, fs, maxBytes }) {
   const parsed = parseCardFilePath(requested);
   if (!parsed) return fail(400, "Invalid path");
   const cardDir = await findCardDir(rootDir, parsed.number, fs);
   if (!cardDir) return fail(404, "Not found");
+  if (!(await staysInside(cardDir, parsed.name, fs))) return fail(403, "Not allowed");
   const result = await readProjectFile({
     rootDir: path.join(cardDir, "files"),
     path: encodeURIComponent(parsed.name),

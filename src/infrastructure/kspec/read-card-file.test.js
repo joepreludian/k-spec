@@ -70,3 +70,26 @@ test("404 for an unknown card, a missing file, or a missing root", async () => {
 test("413 when the file is too large", async () => {
   expect((await read("kspec-cards/3/design.md", { maxBytes: 2 })).status).toBe(413);
 });
+
+test("a look-alike folder outside the five lanes is never used", async () => {
+  await write("lanes/archive/3_old/files/design.md", "# OLD");
+  await write("lanes/aaa/3_older/files/design.md", "# OLDER");
+  expect((await read("kspec-cards/3/design.md")).body.content).toBe("# design");
+  await write("lanes/archive/77_gone/files/design.md", "# archived only");
+  expect((await read("kspec-cards/77/design.md")).status).toBe(404);
+});
+
+test("a symlink that leaves the card's files folder is not followed", async () => {
+  const files = path.join(root, "lanes/todo/3_watcher/files");
+  await fs.symlink(path.join(root, "outside.md"), path.join(files, "leak.md"));
+  await fs.symlink(path.join(files, "design.md"), path.join(files, "alias.md"));
+  expect(await read("kspec-cards/3/leak.md")).toEqual({ status: 403, body: { error: "Not allowed" } });
+  expect((await read("kspec-cards/3/alias.md")).status).toBe(200);
+});
+
+test("a files folder that is a symlink to somewhere else is not served", async () => {
+  await write("elsewhere/x.md", "# elsewhere");
+  await write("lanes/done/9_linked/card.yaml", "title: L\n");
+  await fs.symlink(path.join(root, "elsewhere"), path.join(root, "lanes/done/9_linked/files"));
+  expect((await read("kspec-cards/9/x.md")).status).toBe(403);
+});

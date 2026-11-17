@@ -33,11 +33,15 @@ async function isEmptyOrMissing(dir) {
 
 /**
  * Writes a `{ relativePath: content }` map under `targetDir`. A folder that already has
- * content is refused unless `force`, which replaces everything in it.
+ * content is refused unless `force`, which replaces everything in it, and only when it is a kspec root.
  */
 export async function writeFiles(targetDir, files, { force = false } = {}) {
   if (!(await isEmptyOrMissing(targetDir))) {
     if (!force) throw new Error(`${targetDir} is not empty; pass --force to replace it`);
+    const present = await fs.readdir(targetDir);
+    if (!present.includes("board.yaml") && !present.includes("lanes")) {
+      throw new Error(`${targetDir} does not look like a kspec root (no board.yaml or lanes/); not replacing it`);
+    }
     await fs.rm(targetDir, { recursive: true, force: true });
   }
   for (const [relative, content] of Object.entries(files)) {
