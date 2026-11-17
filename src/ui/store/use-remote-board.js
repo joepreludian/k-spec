@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export const BOARD_POLL_INTERVAL_MS = 5000;
+export const BOARD_POLL_INTERVAL_MS = 10000;
 
 const LOADING = Object.freeze({ status: "loading", board: null, version: null, error: null });
 const failed = (error) => ({ status: "error", board: null, version: null, error });

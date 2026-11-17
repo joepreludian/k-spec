@@ -16,8 +16,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-test("polls every 5 seconds", () => {
-  expect(BOARD_POLL_INTERVAL_MS).toBe(5000);
+test("polls every 10 seconds", () => {
+  expect(BOARD_POLL_INTERVAL_MS).toBe(10000);
 });
 
 test("starts loading, then is ready with the board and version", async () => {

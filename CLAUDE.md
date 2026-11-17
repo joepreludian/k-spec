@@ -24,7 +24,7 @@ src/
   components/ui/   shadcn-generated primitives.
   app/             Next.js App Router entry; wires everything together.
     api/board/             GET /api/board: { board, version } read from the kspec root (422 { error, file } on a bad file)
-    api/board/version/     GET /api/board/version: { version }, polled by the browser every 5 s
+    api/board/version/     GET /api/board/version: { version }, polled by the browser every 10 s
     api/files/[...path]/   GET /api/files/<path>: read-only markdown from the project dir, or from a card's
                            files/ folder for kspec-cards/<number>/<file>
     files/[...path]/       /files/<path>: full-page view of one markdown file
