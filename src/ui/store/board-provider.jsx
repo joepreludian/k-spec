@@ -9,9 +9,16 @@ import { BoardContext } from "./board-context.js";
  * Holds the Board and exposes `dispatch(commandName, input)`.
  * Commands are plain names + serialisable inputs run by the injected executor
  * (`{ execute(name, input) }`), so swapping the transport never touches the UI.
+ * Passing a different `initialBoard` object later replaces the held board.
  */
 export function BoardProvider({ executor, initialBoard, children }) {
   const [board, setBoard] = useState(initialBoard);
+  // A new `initialBoard` (the board was reloaded) replaces whatever is being shown.
+  const [source, setSource] = useState(initialBoard);
+  if (source !== initialBoard) {
+    setSource(initialBoard);
+    setBoard(initialBoard);
+  }
   const [inFlight, setInFlight] = useState(0);
 
   const dispatch = useCallback(

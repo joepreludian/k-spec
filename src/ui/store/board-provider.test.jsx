@@ -90,3 +90,18 @@ test("useBoard outside provider throws", () => {
   }
   expect(() => render(<Bare />)).toThrow(/BoardProvider/);
 });
+
+test("a new initialBoard replaces the board being shown", () => {
+  const executor = { execute: vi.fn() };
+  const tree = (board) => (
+    <BoardProvider executor={executor} initialBoard={board}>
+      <Probe />
+    </BoardProvider>
+  );
+  const { rerender } = render(tree(b));
+  expect(screen.getByText("Board")).toBeInTheDocument();
+  rerender(tree({ ...b, name: "Reloaded" }));
+  expect(screen.getByText("Reloaded")).toBeInTheDocument();
+  rerender(tree({ ...b, name: "Reloaded" }));
+  expect(screen.getByText("Reloaded")).toBeInTheDocument();
+});

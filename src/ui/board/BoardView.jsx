@@ -9,13 +9,14 @@ import { LaneColumn } from "./LaneColumn.jsx";
 import { BoardDnd } from "./dnd/BoardDnd.jsx";
 import { SortableLane } from "./dnd/SortableLane.jsx";
 
-export function BoardView() {
+export function BoardView({ notice = null }) {
   const { board, dispatch } = useBoard();
   const [selectedCardId, setSelectedCardId] = useState(null);
 
   return (
     <div className="flex h-dvh flex-col">
       <BoardHeader />
+      {notice}
       <BoardDnd
         onCardDrop={(input) => dispatch("moveCard", input)}
         onLaneDrop={(input) => dispatch("reorderLanes", input)}
