@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { seedBoard } from "@/infrastructure/seed-board.js";
-import { dumpOnShutdown, getServerStore, registerShutdownDump, resetServerStore } from "./server-store.js";
+import { dumpOnShutdown, getServerStore, registerShutdownDump, resetServerStore, startServerStore } from "./server-store.js";
 
 let dir;
 const saved = { db: process.env.K_SPEC_DB, dump: process.env.K_SPEC_DUMP };
@@ -51,4 +51,22 @@ test("the shutdown dump is registered on process exit once, however often it is 
   registerShutdownDump();
   registerShutdownDump();
   expect(process.listenerCount("exit")).toBe(before + 1);
+});
+
+test("starting the server opens the store, so the first request does not have to", () => {
+  const exit = vi.fn();
+  startServerStore({ exit });
+  expect(exit).not.toHaveBeenCalled();
+  expect(fs.existsSync(process.env.K_SPEC_DB)).toBe(true);
+});
+
+test("starting the server with a broken dump says which file and stops", () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  fs.writeFileSync(process.env.K_SPEC_DUMP, "{ nope");
+  const exit = vi.fn();
+  startServerStore({ exit });
+  expect(exit).toHaveBeenCalledWith(1);
+  const printed = console.error.mock.calls.flat().join(" ");
+  expect(printed).toContain("Dump is not valid JSON");
+  expect(printed).toContain(process.env.K_SPEC_DUMP);
 });

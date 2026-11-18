@@ -196,19 +196,25 @@ function writeBoard(tx, board, version) {
  * `save` replaces every row in one transaction and adds 1 to the version, so a failed
  * save leaves the previous board. SQLite access is synchronous; `readSync` / `replaceSync`
  * are the same operations for callers that cannot await (the shutdown dump).
+ *
+ * Another process may write to the same file (`npm run db:load`), so every read runs in a
+ * transaction (one moment of the database, however many selects) and every write takes the
+ * write lock before reading the version. `snapshotSync` is the board with its version.
  */
 export function createSqliteBoardRepository(db) {
-  const version = () => db.select({ version: t.board.version }).from(t.board).all()[0]?.version ?? 0;
-  const readSync = () => readBoard(db);
+  const versionIn = (tx) => tx.select({ version: t.board.version }).from(t.board).all()[0]?.version ?? 0;
+  const readSync = () => db.transaction((tx) => readBoard(tx));
+  const snapshotSync = () => db.transaction((tx) => ({ board: readBoard(tx), version: versionIn(tx) }));
   const replaceSync = (board) => {
-    db.transaction((tx) => writeBoard(tx, board, version() + 1));
+    db.transaction((tx) => writeBoard(tx, board, versionIn(tx) + 1), { behavior: "immediate" });
   };
   return {
     load: async () => readSync(),
     save: async (board) => replaceSync(board),
-    version,
+    version: () => versionIn(db),
     isEmpty: () => db.select({ id: t.board.id }).from(t.board).all().length === 0,
     readSync,
+    snapshotSync,
     replaceSync,
   };
 }

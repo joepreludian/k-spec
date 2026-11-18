@@ -46,3 +46,15 @@ test("errors keep their status through the route", async () => {
   expect((await post("createCard", { laneId: "lane-backlog", title: "" })).status).toBe(422);
   expect((await post("createCard", { laneId: "lane-backlog", title: "x" }, { "Content-Type": "text/plain" })).status).toBe(415);
 });
+
+test("a board read while a command is being saved never pairs the old board with the new version", async () => {
+  for (let gap = 0; gap < 12; gap += 1) {
+    const title = `Raced ${gap}`;
+    const posting = post("createCard", { laneId: "lane-backlog", title });
+    for (let i = 0; i < gap; i += 1) await Promise.resolve();
+    const got = await (await getBoard()).json();
+    const posted = await (await posting).json();
+    const hasCard = got.board.lanes[0].cards.some((c) => c.title === title);
+    expect({ gap, hasCard }).toEqual({ gap, hasCard: got.version >= posted.version });
+  }
+});

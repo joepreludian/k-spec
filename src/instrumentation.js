@@ -7,7 +7,9 @@ export async function register() {
   const port = process.env.PORT ?? "3000";
   console.log(`\n  k-spec board: http://${host}:${port}/?token=${token}\n`);
 
-  // The board dump is written when the server stops (and on demand with `npm run db:dump`).
-  const { registerShutdownDump } = await import("./infrastructure/store/server-store.js");
+  // Open the board store now: a dump that cannot be imported stops the server here, file named.
+  const { registerShutdownDump, startServerStore } = await import("./infrastructure/store/server-store.js");
+  startServerStore();
+  // The dump is written when the server stops (and on demand with `npm run db:dump`).
   registerShutdownDump();
 }

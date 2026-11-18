@@ -159,3 +159,25 @@ test("the board and its version survive closing and reopening the file", async (
   second.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("a snapshot is the board together with the version that produced it", async () => {
+  await repository.save(seedBoard());
+  await repository.save({ ...seedBoard(), name: "Second" });
+  const snapshot = repository.snapshotSync();
+  expect(snapshot.version).toBe(2);
+  expect(snapshot.board).toStrictEqual({ ...seedBoard(), name: "Second" });
+});
+
+test("reads see one moment of the database and writes take the write lock up front", async () => {
+  // Another process (npm run db:load) can write between statements; a transaction keeps a
+  // read on one state, and an immediate one keeps a save from failing half-way on a stale read.
+  await repository.save(seedBoard());
+  const transaction = vi.spyOn(opened.db, "transaction");
+  repository.readSync();
+  expect(transaction).toHaveBeenCalledTimes(1);
+  repository.snapshotSync();
+  expect(transaction).toHaveBeenCalledTimes(2);
+  repository.replaceSync(seedBoard());
+  expect(transaction).toHaveBeenCalledTimes(3);
+  expect(transaction.mock.calls[2][1]).toEqual({ behavior: "immediate" });
+});
