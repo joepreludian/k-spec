@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
-    "export-seed": "node --import ./scripts/register-alias.mjs scripts/export-seed.mjs"
+    "db:dump": "node --import ./scripts/register-alias.mjs scripts/db-dump.mjs",
+    "db:load": "node --import ./scripts/register-alias.mjs scripts/db-load.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

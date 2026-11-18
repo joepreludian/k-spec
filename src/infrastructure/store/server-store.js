@@ -28,3 +28,19 @@ export function resetServerStore() {
   globalThis[KEY]?.close();
   delete globalThis[KEY];
 }
+
+/**
+ * Writes the dump as the server goes down, if this process ever opened the store (it never
+ * opens the database just to dump). Synchronous, so it can run from an exit handler; a failure
+ * is logged and swallowed. Returns whether a dump was attempted.
+ */
+export function dumpOnShutdown() {
+  const store = globalThis[KEY];
+  if (!store) return false;
+  try {
+    store.dump();
+  } catch (error) {
+    console.error("Could not write the board dump on shutdown", error);
+  }
+  return true;
+}
