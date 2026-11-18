@@ -1,7 +1,6 @@
-import { kspecRoot } from "@/infrastructure/kspec/kspec-root.js";
-import { kspecVersion } from "@/infrastructure/kspec/version.js";
+import { getServerStore } from "@/infrastructure/store/server-store.js";
 
-/** GET /api/board/version → { version }: cheap "has the kspec root changed?" check for the browser. */
+/** GET /api/board/version → { version }: cheap "has the board changed?" check for the browser. */
 export async function GET() {
-  return Response.json({ version: await kspecVersion(kspecRoot()) }, { headers: { "Cache-Control": "no-store" } });
+  return Response.json({ version: getServerStore().repository.version() }, { headers: { "Cache-Control": "no-store" } });
 }

@@ -1,69 +1,49 @@
 // @vitest-environment node
-import fs from "node:fs/promises";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { seedBoard } from "@/infrastructure/seed-board.js";
+import { resetServerStore } from "@/infrastructure/store/server-store.js";
 import { GET as getFile } from "../files/[...path]/route.js";
 import { GET } from "./route.js";
 import { GET as getVersion } from "./version/route.js";
 
-let root;
-const saved = process.env.K_SPEC_ROOT;
-const write = async (relative, content) => {
-  const target = path.join(root, relative);
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(target, content);
-};
+let dir;
+const saved = { db: process.env.K_SPEC_DB, dump: process.env.K_SPEC_DUMP };
+const restore = (key, value) => (value === undefined ? delete process.env[key] : (process.env[key] = value));
 
-beforeEach(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), "kspec-api-"));
-  process.env.K_SPEC_ROOT = root;
-  await write("board.yaml", "name: From disk\n");
-  await write("lanes/todo/3_watcher/card.yaml", "title: Watcher\n");
-  await write("lanes/todo/3_watcher/files/design.md", "# design");
+beforeEach(() => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "kspec-api-"));
+  process.env.K_SPEC_DB = path.join(dir, "k.db");
+  process.env.K_SPEC_DUMP = path.join(dir, "k.dump.json");
 });
-afterEach(async () => {
-  if (saved === undefined) delete process.env.K_SPEC_ROOT;
-  else process.env.K_SPEC_ROOT = saved;
-  await fs.rm(root, { recursive: true, force: true });
+afterEach(() => {
+  resetServerStore();
+  restore("K_SPEC_DB", saved.db);
+  restore("K_SPEC_DUMP", saved.dump);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("GET /api/board returns the board and its version, uncached", async () => {
+test("GET /api/board returns the stored board and its version, uncached", async () => {
   const res = await GET();
   expect(res.status).toBe(200);
   expect(res.headers.get("cache-control")).toBe("no-store");
   const { board, version } = await res.json();
-  expect(board.name).toBe("From disk");
-  expect(board.lanes[1].cards[0].links).toEqual([
-    { id: "card-3-file-design.md", title: "design", path: "kspec-cards/3/design.md" },
-  ]);
-  expect(version).toMatch(/^[0-9a-f]{40}$/);
+  expect(board).toEqual(seedBoard());
+  expect(version).toBe(1);
 });
 
-test("GET /api/board answers 422 with the error and file when a file is broken", async () => {
-  await write("lanes/todo/3_watcher/card.yaml", "description: no title\n");
-  const res = await GET();
-  expect(res.status).toBe(422);
-  expect(res.headers.get("cache-control")).toBe("no-store");
-  const body = await res.json();
-  expect(body.file).toBe("lanes/todo/3_watcher/card.yaml");
-  expect(typeof body.error).toBe("string");
-  expect(body.version).toMatch(/^[0-9a-f]{40}$/);
-});
-
-test("GET /api/board/version matches the board's version and follows changes", async () => {
+test("GET /api/board/version returns the same version, uncached", async () => {
   const { version } = await (await GET()).json();
   const res = await getVersion();
   expect(res.headers.get("cache-control")).toBe("no-store");
   expect(await res.json()).toEqual({ version });
-  await write("lanes/todo/3_watcher/card.yaml", "title: Renamed watcher\n");
-  expect((await (await getVersion()).json()).version).not.toBe(version);
 });
 
-test("GET /api/files serves a card file through the kspec-cards prefix", async () => {
+test("GET /api/files no longer knows card folders: such a path is an ordinary project path", async () => {
   const segments = ["kspec-cards", "3", "design.md"];
   const res = await getFile(new Request("http://localhost/api/files/kspec-cards/3/design.md"), {
     params: Promise.resolve({ path: segments }),
   });
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ path: "kspec-cards/3/design.md", content: "# design" });
+  expect(res.status).toBe(404);
 });

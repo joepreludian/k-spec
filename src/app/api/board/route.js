@@ -1,8 +1,8 @@
-import { kspecRoot } from "@/infrastructure/kspec/kspec-root.js";
-import { loadBoard } from "@/infrastructure/kspec/load-board.js";
+import { getServerStore } from "@/infrastructure/store/server-store.js";
 
-/** GET /api/board → { board, version } read from the kspec root; 422 { error, file, version } when a file is wrong. */
+/** GET /api/board → { board, version }: the stored board and the number of the save that produced it. */
 export async function GET() {
-  const { status, body } = await loadBoard(kspecRoot());
-  return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+  const { repository } = getServerStore();
+  const body = { board: await repository.load(), version: repository.version() };
+  return Response.json(body, { headers: { "Cache-Control": "no-store" } });
 }
