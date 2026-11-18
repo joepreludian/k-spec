@@ -16,8 +16,8 @@ test("renders the board name from the server as the heading", async () => {
   expect(await screen.findByRole("heading", { level: 1, name: "k-spec" })).toBeInTheDocument();
 });
 
-test("renders the fixed lanes", async () => {
-  installBoardServer(boardOf());
+test("renders the lanes the server has", async () => {
+  installBoardServer(boardOf({ Backlog: [], Done: [] }));
   renderPage();
   expect(await screen.findByText("Backlog")).toBeInTheDocument();
   expect(screen.getByText("Done")).toBeInTheDocument();

@@ -1,47 +1,53 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export const BOARD_POLL_INTERVAL_MS = 10000;
 
 const LOADING = Object.freeze({ status: "loading", board: null, version: null, error: null });
-const failed = (error) => ({ status: "error", board: null, version: null, error });
-const UNREACHABLE = Object.freeze({ message: "Could not load the board", file: null });
+const UNREACHABLE = Object.freeze({ status: "error", board: null, version: null, error: { message: "Could not load the board" } });
+const ready = (board, version) => ({ status: "ready", board, version, error: null });
 
 /**
- * The board as the server reads it from the kspec root, kept fresh by polling.
+ * The server's board, kept fresh, and the one place that knows which board is the newest.
  *
- * Returns `{ status: "loading" | "ready" | "error", board, version, error }`. It loads
+ * Returns `{ status: "loading" | "ready" | "error", board, version, error, accept }`. It loads
  * `/api/board` once, then asks `/api/board/version` every few seconds while the tab is visible
- * (and when it becomes visible) and reloads when the version differs from the last one the
- * server answered with. A reload that fails keeps the board already shown: a broken file sets
- * `error` (`{ message, file }`) next to it, a network failure is retried on the next tick.
+ * (and when it becomes visible) and reloads when the version is not the one it holds. A failed
+ * reload keeps the board already shown and is retried on the next tick.
+ *
+ * `accept({ board, version })` hands in the answer of a command this browser sent: a newer
+ * version becomes the board (so the next poll has nothing to reload), an older one is ignored
+ * and the board is checked again. It returns the board that should be on screen.
  */
 export function useRemoteBoard() {
   const [state, setState] = useState(LOADING);
+  const newest = useRef({ board: null, version: null });
+  const accepted = useRef(0); // counts accepted command answers, to spot board answers they overtook
+  const reload = useRef(() => {});
+
+  const take = (board, version) => {
+    newest.current = { board, version };
+    setState(ready(board, version));
+  };
 
   useEffect(() => {
     let alive = true;
-    let answered = null; // version of the last /api/board answer, good or broken
     let loading = false;
 
     const load = async () => {
       if (loading) return;
       loading = true;
+      const acceptedAtStart = accepted.current;
       try {
         const res = await fetch("/api/board", { cache: "no-store" });
-        if (res.status !== 200 && res.status !== 422) throw new Error(`HTTP ${res.status}`);
-        const body = await res.json();
+        if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+        const { board, version } = await res.json();
         if (!alive) return;
-        answered = body.version ?? null;
-        if (res.status === 200) {
-          setState({ status: "ready", board: body.board, version: body.version, error: null });
-        } else {
-          const error = { message: body.error, file: body.file ?? null };
-          setState((prev) => (prev.board ? { ...prev, error } : failed(error)));
-        }
+        const overtaken = accepted.current !== acceptedAtStart && version <= newest.current.version;
+        if (!overtaken) take(board, version);
       } catch {
-        if (alive) setState((prev) => (prev.board ? prev : failed(UNREACHABLE)));
+        if (alive) setState((prev) => (prev.board ? prev : UNREACHABLE));
       } finally {
         loading = false;
       }
@@ -53,21 +59,34 @@ export function useRemoteBoard() {
         const res = await fetch("/api/board/version", { cache: "no-store" });
         if (!res.ok) return;
         const { version } = await res.json();
-        if (alive && version !== answered) await load();
+        if (alive && version !== newest.current.version) await load();
       } catch {
         // a failed check is not news; the next tick asks again
       }
     };
 
+    reload.current = load;
     load();
     const timer = setInterval(check, BOARD_POLL_INTERVAL_MS);
     document.addEventListener("visibilitychange", check);
     return () => {
       alive = false;
+      reload.current = () => {};
       clearInterval(timer);
       document.removeEventListener("visibilitychange", check);
     };
   }, []);
 
-  return state;
+  const accept = useCallback((answer) => {
+    const known = newest.current.version;
+    if (answer?.board && Number.isInteger(answer.version) && (known === null || answer.version > known)) {
+      accepted.current += 1;
+      take(answer.board, answer.version);
+    } else {
+      reload.current(); // not newer than what is shown: let the server say what is current
+    }
+    return newest.current.board;
+  }, []);
+
+  return { ...state, accept };
 }

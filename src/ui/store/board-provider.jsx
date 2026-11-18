@@ -9,6 +9,7 @@ import { BoardContext } from "./board-context.js";
  * Holds the Board and exposes `dispatch(commandName, input)`.
  * Commands are plain names + serialisable inputs run by the injected executor
  * (`{ execute(name, input) }`), so swapping the transport never touches the UI.
+ * A command that fails shows a toast and resolves `undefined`; the board stays as it was.
  * Passing a different `initialBoard` object later replaces the held board.
  */
 export function BoardProvider({ executor, initialBoard, children }) {
@@ -29,11 +30,14 @@ export function BoardProvider({ executor, initialBoard, children }) {
         if (result?.board) setBoard(result.board);
         return result;
       } catch (error) {
+        // A broken rule explains itself; anything else means the change did not reach the store.
         if (error instanceof DomainError) {
           toast.error(error.message);
-          return undefined;
+        } else {
+          console.error(`Command ${name} failed`, error);
+          toast.error("Could not save the change");
         }
-        throw error;
+        return undefined;
       } finally {
         setInFlight((n) => n - 1);
       }

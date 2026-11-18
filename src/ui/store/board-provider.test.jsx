@@ -64,23 +64,20 @@ test("domain error shows toast, keeps state, resolves undefined", async () => {
   expect(screen.getByTestId("pending")).toHaveTextContent("idle");
 });
 
-test("non-domain errors are rethrown", async () => {
+test("any other failure says the change was not saved, keeps the board, resolves undefined", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
   const executor = { execute: vi.fn().mockRejectedValue(new Error("boom")) };
-  let caught;
-  function Thrower() {
-    const { dispatch } = useBoard();
-    return (
-      <button onClick={() => dispatch("getBoard", {}).catch((e) => (caught = e))}>go</button>
-    );
-  }
   render(
     <BoardProvider executor={executor} initialBoard={b}>
-      <Thrower />
+      <Probe />
     </BoardProvider>,
   );
-  await userEvent.click(screen.getByText("go"));
-  await waitFor(() => expect(caught?.message).toBe("boom"));
-  expect(toast.error).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByText("add lane"));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Could not save the change"));
+  expect(screen.getByText("Board")).toBeInTheDocument();
+  expect(screen.getByTestId("last-id")).toHaveTextContent("none");
+  expect(screen.getByTestId("pending")).toHaveTextContent("idle");
+  console.error.mockRestore();
 });
 
 test("useBoard outside provider throws", () => {
