@@ -16,6 +16,9 @@ coverage/
 docs/specs/
 .superpowers/
 
+# sqlite database (the committed state is data/k-spec.dump.json)
+data/*.db*
+
 # misc
 *.log
 .DS_Store

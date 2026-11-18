@@ -10,6 +10,8 @@ const nextConfig = {
   // Browsers reaching the dev server through K_SPEC_HOST must be allow-listed, or Next
   // rejects their HMR websocket and the page never hydrates (clicks do nothing).
   allowedDevOrigins: allowedDevOrigins(process.env),
+  // Native module: must be required at runtime, not bundled.
+  serverExternalPackages: ["better-sqlite3"],
   turbopack: {
     rules: {
       "*.css": {
