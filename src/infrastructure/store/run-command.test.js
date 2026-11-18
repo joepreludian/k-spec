@@ -86,7 +86,14 @@ test("any other failure answers 500 without details, nothing saved", async () =>
 
 test("two commands sent at the same moment both take effect", async () => {
   // Make the gap between load and save real, as it is with any awaiting repository.
-  const slow = { ...repository, load: async () => (await new Promise((r) => setTimeout(r, 5)), repository.load()) };
+  const slow = {
+    ...repository,
+    load: async () => {
+      const board = await repository.load();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return board;
+    },
+  };
   deps = { ...deps, repository: slow };
   const [a, b] = await Promise.all([
     post("createCard", { laneId: "lane-backlog", title: "A" }),
