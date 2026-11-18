@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { seedBoard } from "@/infrastructure/seed-board.js";
-import { dumpOnShutdown, getServerStore, resetServerStore } from "./server-store.js";
+import { dumpOnShutdown, getServerStore, registerShutdownDump, resetServerStore } from "./server-store.js";
 
 let dir;
 const saved = { db: process.env.K_SPEC_DB, dump: process.env.K_SPEC_DUMP };
@@ -44,4 +44,11 @@ test("a dump that cannot be written is logged, not thrown", () => {
   fs.mkdirSync(process.env.K_SPEC_DUMP); // a folder sits where the file should go
   expect(() => dumpOnShutdown()).not.toThrow();
   expect(console.error).toHaveBeenCalled();
+});
+
+test("the shutdown dump is registered on process exit once, however often it is asked for", () => {
+  const before = process.listenerCount("exit");
+  registerShutdownDump();
+  registerShutdownDump();
+  expect(process.listenerCount("exit")).toBe(before + 1);
 });

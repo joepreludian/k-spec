@@ -6,6 +6,7 @@ import { openStore, storePaths } from "./open-store.js";
 // One store per server process. It lives on globalThis so dev hot reload, which re-evaluates
 // this module, keeps using the same connection and the same queue.
 const KEY = Symbol.for("k-spec.server-store");
+const HOOK = Symbol.for("k-spec.shutdown-hook");
 
 /**
  * The process's board store, opened on first use at `storePaths()`:
@@ -43,4 +44,11 @@ export function dumpOnShutdown() {
     console.error("Could not write the board dump on shutdown", error);
   }
   return true;
+}
+
+/** Arranges `dumpOnShutdown` to run when the process exits (Ctrl-C, SIGTERM, a normal stop). Once per process. */
+export function registerShutdownDump() {
+  if (globalThis[HOOK]) return;
+  globalThis[HOOK] = true;
+  process.on("exit", () => dumpOnShutdown());
 }
