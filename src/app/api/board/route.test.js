@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { seedBoard } from "@/infrastructure/seed-board.js";
 import { resetServerStore } from "@/infrastructure/store/server-store.js";
-import { GET as getFile } from "../files/[...path]/route.js";
 import { GET } from "./route.js";
 import { GET as getVersion } from "./version/route.js";
 
@@ -38,12 +37,4 @@ test("GET /api/board/version returns the same version, uncached", async () => {
   const res = await getVersion();
   expect(res.headers.get("cache-control")).toBe("no-store");
   expect(await res.json()).toEqual({ version });
-});
-
-test("GET /api/files no longer knows card folders: such a path is an ordinary project path", async () => {
-  const segments = ["kspec-cards", "3", "design.md"];
-  const res = await getFile(new Request("http://localhost/api/files/kspec-cards/3/design.md"), {
-    params: Promise.resolve({ path: segments }),
-  });
-  expect(res.status).toBe(404);
 });

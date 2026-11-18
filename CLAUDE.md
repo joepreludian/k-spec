@@ -2,11 +2,11 @@
 
 ## Purpose
 
-k-spec is a Trello-style kanban board where a person hands work to AI agents as cards and talks to them on the card: the description is the spec, checklists define "done", comments are the back-and-forth, and an agent status tag shows whether an agent is idle, working, waiting for input, or blocked. Long-term the board is mirrored to files under a project's `docs/k-spec` folder, served from a Docker container, and driven by a CLI. The current slice is the web UI, behind a token-link access gate, reading the board from a `kspec-root` folder (`board.yaml`, one folder per fixed lane with a `cards.yaml` order, one folder per card with `card.yaml` and `files/*.md`); nothing is written back yet, so edits made in the browser live in memory and are replaced when the board reloads: cards carry sequential `#n` numbers, the card dialog has Overview / Spec / Execution / Activity tabs (Spec renders linked markdown files from the project; Execution shows where a card is being worked and the Claude session behind it, seeded for now), and the top bar names the project with links and a README sheet. A card's active work can also carry published services (title + URL, set through the `publishService` / `unpublishService` commands, seeded for now): the board card shows a globe that turns green when the browser's live check (`src/ui/shared/use-service-status.js`, a `no-cors` fetch) gets an answer, and the Overview tab lists them as new-tab buttons.
+k-spec is a Trello-style kanban board where a person hands work to AI agents as cards and talks to them on the card: the description is the spec, checklists define "done", comments are the back-and-forth, and an agent status tag shows whether an agent is idle, working, waiting for input, or blocked. The application owns its state: the board is stored in a SQLite database, people change it through the web UI (behind a token-link access gate), and a CLI and an MCP server for agents come next; nobody edits state by hand. Every edit in the browser is a command posted to the server and saved. What goes into git is a JSON dump of the board that the application writes and reads (`data/k-spec.dump.json`), never the database file. Cards carry sequential `#n` numbers, the card dialog has Overview / Spec / Execution / Activity tabs (Spec renders linked markdown files from the project; Execution shows where a card is being worked and the Claude session behind it, seeded for now), and the top bar names the project with links and a README sheet. A card's active work can also carry published services (title + URL, set through the `publishService` / `unpublishService` commands, seeded for now): the board card shows a globe that turns green when the browser's live check (`src/ui/shared/use-service-status.js`, a `no-cors` fetch) gets an answer, and the Overview tab lists them as new-tab buttons.
 
 ## Stack
 
-Node 24, npm, Next.js 16 (App Router, JavaScript), React 19, Tailwind CSS 4, shadcn/ui (JSX mode), dnd-kit, react-markdown, Vitest + Testing Library + jsdom, lucide-react, sonner.
+Node 24, npm, Next.js 16 (App Router, JavaScript), React 19, Tailwind CSS 4, shadcn/ui (JSX mode), dnd-kit, react-markdown, SQLite through Drizzle ORM (`drizzle-orm` + `better-sqlite3`, migrations by `drizzle-kit`), Vitest + Testing Library + jsdom, lucide-react, sonner.
 
 ## Layout
 
@@ -16,21 +16,22 @@ src/
                    pure functions returning new objects, domain errors.
   application/     use cases over the BoardRepository port; the command
                    registry (name -> use case).
-  infrastructure/  in-memory repository, seed board, clock, ids, local
-                   command executor, access-token logic.
-    kspec/         the kspec-root format: files <-> board mapper, disk reader,
-                   change version, card files, seed export.
+  infrastructure/  in-memory repository (tests), seed board, clock, ids, local
+                   and HTTP command executors, access-token logic.
+    store/         the SQLite store: schema, repository, dump/load, the
+                   per-process server store and command queue.
   ui/              React components, the board context store (useBoard).
   components/ui/   shadcn-generated primitives.
   app/             Next.js App Router entry; wires everything together.
-    api/board/             GET /api/board: { board, version } read from the kspec root (422 { error, file } on a bad file)
+    api/board/             GET /api/board: { board, version } from the store
     api/board/version/     GET /api/board/version: { version }, polled by the browser every 10 s
-    api/files/[...path]/   GET /api/files/<path>: read-only markdown from the project dir, or from a card's
-                           files/ folder for kspec-cards/<number>/<file>
+    api/commands/[name]/   POST /api/commands/<name>: run one command, answer { ...result, version }
+    api/files/[...path]/   GET /api/files/<path>: read-only markdown from the project dir
     files/[...path]/       /files/<path>: full-page view of one markdown file
   proxy.js         Next 16 request proxy (middleware) for the token gate.
-scripts/           export-seed.mjs and the `@/` alias hook for plain node.
-kspec-root/        sample board data (the exported seed), committed.
+scripts/           db-dump.mjs, db-load.mjs and the `@/` alias hook for plain node.
+drizzle/           generated SQL migrations, committed (never edit by hand).
+data/              k-spec.dump.json (committed) and the SQLite file (git-ignored).
 ```
 
 Dependency rule: `ui -> application -> domain`. `infrastructure` implements ports and is injected at the edge (`src/app`). Nothing in `domain` or `application` imports from `ui`, `infrastructure`, `react`, or `next`.
@@ -38,7 +39,7 @@ Dependency rule: `ui -> application -> domain`. `infrastructure` implements port
 ## Rules
 
 - **TDD is mandatory.** Write the failing test first, watch it fail, write the minimal code, watch it pass, refactor. No production code without a failing test.
-- **Domain is pure JavaScript.** No framework imports, no side effects, immutable updates, ISO-8601 string timestamps. Everything must serialize to plain JSON (a card will become a markdown-with-frontmatter file later).
+- **Domain is pure JavaScript.** No framework imports, no side effects, immutable updates, ISO-8601 string timestamps. Everything must serialize to plain JSON.
 - **UI only dispatches commands.** Components call `dispatch(commandName, input)` with a plain serializable input; they never touch repositories or domain mutation functions directly.
 - **JavaScript only.** `.js` / `.jsx`, ESM. No TypeScript files.
 - **Plain React context** for state. No Zustand or other state libraries.
@@ -55,8 +56,11 @@ npm run build        # production build
 K_SPEC_TOKEN=mytoken npm run dev   # fix the access token instead of a generated one
 K_SPEC_HOST=my-host npm run dev    # host name used in the printed access link; also allow-listed for dev HMR
 K_SPEC_PROJECT_DIR=/path npm run dev   # directory the markdown viewer reads from (default: cwd)
-K_SPEC_ROOT=/path npm run dev          # folder the board is read from (default: ./kspec-root)
-npm run export-seed [-- <dir>] [-- --force]   # write the seed board as a kspec root (refuses a non-empty folder without --force)
+K_SPEC_DB=/path/k.db npm run dev        # SQLite file (default: ./data/k-spec.db, git-ignored)
+K_SPEC_DUMP=/path/k.json npm run dev    # dump file (default: ./data/k-spec.dump.json, committed)
+npm run db:dump      # write the stored board to the dump file
+npm run db:load      # replace the stored board with the dump file (safe while the server runs)
+npm run db:generate  # after changing src/infrastructure/store/schema.js: generate a migration into drizzle/
 ```
 
 The server prints `k-spec board: http://<host>:<port>/?token=…` on start. Opening that link sets the `k-spec-token` cookie; without it every page redirects to `/access`. The gate lives in `src/proxy.js` and `src/infrastructure/access/`.
@@ -65,9 +69,15 @@ When the browser reaches the dev server through any host other than `localhost` 
 
 The file viewer (`/api/files/<path>`, `/files/<path>`, the README sheet, the card Spec tab) serves only `.md`/`.markdown` files inside `K_SPEC_PROJECT_DIR`, capped at 1 MiB, behind the same token; the path rule is `src/domain/markdown-path.js` and the resolver is `src/infrastructure/files/`.
 
-## kspec-root
+## Store
 
-The board is whatever is in `K_SPEC_ROOT`. The format lives in `src/infrastructure/kspec/` (`format.js` has the fixed lanes; `board-from-files.js` reads, `board-to-files.js` writes) and is described in `docs/specs/2026-11-16-k-spec-filesystem-read-design.md`. Keys are `snake_case`, values keep the domain spelling, unknown keys are ignored, and no ids are stored: the reader builds them from position (`card-3`, `card-3-comment-1`). A card is identified by the number its folder name starts with; every markdown file directly in its `files/` folder is a tile in the Spec tab. A file with bad content fails the whole read with the file named: a full-page error on first load, a banner over the last good board on a refresh. A missing folder is the five empty lanes.
+The board lives in SQLite (`src/infrastructure/store/`). `schema.js` has the tables: anything the domain gives an id is a row keyed by that id, ordered children carry a `position`, and value objects without identity (a work's location and session, an event's type-specific fields) are JSON columns. `sqlite-board-repository.js` implements the same `BoardRepository` port the use cases always had: `load()` assembles the whole board, `save(board)` replaces every row in one transaction and adds 1 to the board's `version`. Use cases and the domain know nothing about SQL.
+
+The server is the only writer. `server-store.js` holds one connection and one command queue per process (on `globalThis`, so dev hot reload reuses them). `POST /api/commands/<name>` takes the command's input as a JSON object and runs it through the queue, one command at a time, so two requests never load the same board and overwrite each other. Answers: `200 { ...result, version }`, `422 { error, code }` for a broken domain rule, `404` unknown command, `400` body not a JSON object, `415` not sent as JSON, `500` anything else. In the browser, `http-command-executor.js` posts commands and `useRemoteBoard` decides which board is newest (a command's answer, or a reload after the 10 s version check shows someone else changed it).
+
+Dump and load: `data/k-spec.dump.json` is `{ "format": 1, "board": … }` with sorted keys. It is written on demand (`npm run db:dump`) and when the server shuts down, not after every command. A database that holds no board is filled from the dump if there is one, otherwise with the sample board (`seed-board.js`); a database that already has a board never reads the dump, so after pulling a newer dump run `npm run db:load`. Stopping the server overwrites the dump with the server's state. A dump that cannot be read stops startup with the file named.
+
+**`data/k-spec.dump.json` is written by the application. Do not edit it by hand or with an agent.** Change the board through the app, then run `npm run db:dump`.
 
 ## Git
 
