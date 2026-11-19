@@ -2,6 +2,9 @@
   "name": "k-spec",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "k-spec": "bin/k-spec.mjs"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

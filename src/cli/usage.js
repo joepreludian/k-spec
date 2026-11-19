@@ -1,13 +1,13 @@
 /** The help text, built from the command table so it cannot drift from what the CLI accepts. */
 export function usageText(commands) {
   const rows = Object.values(commands);
-  const width = Math.max(...rows.map((command) => command.usage.length));
   return [
     "k-spec <command> [arguments] [options]",
     "",
     "Commands (<n> is a card number, with or without #):",
-    ...rows.map((command) => `  ${command.usage.padEnd(width)}  ${command.summary}`),
-    `  ${"help".padEnd(width)}  this text`,
+    ...rows.flatMap((command) => [`  ${command.usage}`, `      ${command.summary}`]),
+    "  help",
+    "      this text",
     "",
     "Options:",
     "  --json   print JSON instead of text",
