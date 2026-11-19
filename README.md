@@ -70,7 +70,7 @@ $ k-spec show 4
 lane In progress | status working | labels cli, ui | updated 2026-11-14 10:00
 
 Description
-…
+  …
 
 Checklist 1: Done when (1/3)
   1.1 [x] parses flags
@@ -79,6 +79,8 @@ Comments (2)
   You, 2026-11-14 09:30: Start with the parser.
   Claude (agent), 2026-11-14 10:00: Parser done, help next.
 ```
+
+**Text from cards.** Titles, names and other one-line fields are printed on one line with control characters replaced by spaces; descriptions and comments are indented under their heading. So nothing written on a card can pass for a line the CLI itself printed. `--json` gives the text untouched.
 
 **Who wrote a comment.** A comment from the CLI is yours, like one typed in the browser. An agent marks its own with `--agent <name>`, or by having `K_SPEC_AGENT=<name>` in its environment.
 

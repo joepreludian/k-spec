@@ -5,6 +5,7 @@ import { CommandFailed, createHttpCommandExecutor } from "@/infrastructure/http-
 import { ConnectionError, resolveConnection } from "./connection.js";
 import { UsageError } from "./errors.js";
 import { READ_COMMANDS } from "./read-commands.js";
+import { oneLine } from "./render.js";
 import { usageText } from "./usage.js";
 import { WRITE_COMMANDS } from "./write-commands.js";
 
@@ -29,7 +30,7 @@ function parse(command, words) {
       strict: true,
     });
   } catch (error) {
-    throw new UsageError(error.message);
+    throw new UsageError(error.message.split("\n")[0]);
   }
   const [min, max] = command.arity;
   if (parsed.positionals.length < min || parsed.positionals.length > max) {
@@ -63,7 +64,7 @@ export async function runCli({ argv, env, cwd, fetch, readFile, readStdin, stdou
     return 0;
   } catch (error) {
     const fail = (code, message) => {
-      stderr(`error: ${message}`);
+      stderr(`error: ${oneLine(message)}`); // names from the board can be in it
       return code;
     };
     if (error instanceof UsageError) return fail(2, error.message);

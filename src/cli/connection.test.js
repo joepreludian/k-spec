@@ -42,3 +42,30 @@ test.each(["not json", "[]", "null", '{"url":"http://x"}', '{"token":"t"}', '{"u
   "a broken note names the file: %s",
   (text) => expect(() => resolve({}, text)).toThrow("cannot read the server note: /p/data/k-spec.server.json"),
 );
+
+test("a note that cannot be opened is a connection problem naming the file", () => {
+  const readFile = () => {
+    throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+  };
+  const attempt = () => resolveConnection({ env: {}, noteFile: FILE, readFile });
+  expect(attempt).toThrow(ConnectionError);
+  expect(attempt).toThrow("cannot read the server note: /p/data/k-spec.server.json");
+});
+
+test.each(["not a url", "localhost:3999", "ftp://h/x", "//h:1"])("K_SPEC_URL must be an http(s) address: %s", (url) => {
+  const attempt = () => resolve({ K_SPEC_URL: url, K_SPEC_TOKEN: "t" }, null);
+  expect(attempt).toThrow(ConnectionError);
+  expect(attempt).toThrow("K_SPEC_URL is not an http(s) address");
+});
+
+test("a pasted access link is cut down to the address, so the token in it is never printed", () => {
+  expect(resolve({ K_SPEC_URL: "http://h:3000/?token=SECRET#x", K_SPEC_TOKEN: "t" }, null)).toEqual({ url: "http://h:3000", token: "t" });
+  expect(resolve({ K_SPEC_URL: "https://h/base/", K_SPEC_TOKEN: "t" }, null).url).toBe("https://h/base");
+  expect(() => resolve({ K_SPEC_URL: "http://h:3000/?token=SECRET", K_SPEC_TOKEN: "" }, null)).toThrow(
+    "K_SPEC_URL is set but K_SPEC_TOKEN is not",
+  );
+});
+
+test("a note with an address that is not http(s) cannot be used", () => {
+  expect(() => resolve({}, { url: "ftp//x", token: "t" })).toThrow("cannot read the server note: /p/data/k-spec.server.json");
+});

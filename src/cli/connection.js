@@ -8,8 +8,26 @@ export class ConnectionError extends Error {
 
 const text = (value) => (typeof value === "string" ? value.trim() : "");
 
+/** The address without query or fragment (a pasted access link carries a token there), or null if it is not http(s). */
+function address(value) {
+  let parsed;
+  try {
+    parsed = new URL(text(value));
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, "");
+}
+
 function fromNote(noteFile, readFile) {
-  const content = readFile(noteFile);
+  const unreadable = () => new ConnectionError(`cannot read the server note: ${noteFile}`);
+  let content;
+  try {
+    content = readFile(noteFile);
+  } catch {
+    throw unreadable();
+  }
   if (content === null) {
     throw new ConnectionError(
       `server not running (no ${noteFile}; start it with npm run dev, or set K_SPEC_URL and K_SPEC_TOKEN)`,
@@ -21,8 +39,9 @@ function fromNote(noteFile, readFile) {
   } catch {
     note = null;
   }
-  if (!text(note?.url) || !text(note?.token)) throw new ConnectionError(`cannot read the server note: ${noteFile}`);
-  return { url: note.url, token: note.token };
+  const url = address(note?.url);
+  if (!url || !text(note?.token)) throw unreadable();
+  return { url, token: note.token };
 }
 
 /**
@@ -32,14 +51,10 @@ function fromNote(noteFile, readFile) {
  * `readFile(path)` returns the file's text, or null when there is no such file.
  */
 export function resolveConnection({ env, noteFile, readFile }) {
-  const url = text(env.K_SPEC_URL);
-  let found;
-  if (url) {
-    const token = text(env.K_SPEC_TOKEN);
-    if (!token) throw new ConnectionError("K_SPEC_URL is set but K_SPEC_TOKEN is not");
-    found = { url, token };
-  } else {
-    found = fromNote(noteFile, readFile);
-  }
-  return { url: found.url.trim().replace(/\/+$/, ""), token: found.token };
+  if (!text(env.K_SPEC_URL)) return fromNote(noteFile, readFile);
+  const token = text(env.K_SPEC_TOKEN);
+  if (!token) throw new ConnectionError("K_SPEC_URL is set but K_SPEC_TOKEN is not");
+  const url = address(env.K_SPEC_URL);
+  if (!url) throw new ConnectionError("K_SPEC_URL is not an http(s) address");
+  return { url, token };
 }

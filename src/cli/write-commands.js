@@ -8,6 +8,7 @@ import {
 } from "@/application/board-lookup.js";
 import { DomainError } from "@/domain/errors.js";
 import { UsageError } from "./errors.js";
+import { oneLine } from "./render.js";
 
 const pretty = (value) => JSON.stringify(value, null, 2);
 const withoutBoard = (answer) => Object.fromEntries(Object.entries(answer).filter(([key]) => key !== "board"));
@@ -26,7 +27,7 @@ async function findCard(api, word) {
 
 /** Prints the one-line confirmation, or with --json the server's answer without the board. */
 function report({ out, json }, line, answer) {
-  out(json ? pretty(withoutBoard(answer)) : line);
+  out(json ? pretty(withoutBoard(answer)) : oneLine(line));
 }
 
 function agentAuthor(values, env) {

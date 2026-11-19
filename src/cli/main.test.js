@@ -106,3 +106,28 @@ test("without K_SPEC_URL the note file is used", async () => {
   const elsewhere = await cli(["board"], { env: { ...NO_ENV, K_SPEC_SERVER_FILE: "/other/note.json" }, note: { url: "http://k.test", token: "tok" } });
   expect(elsewhere.err).toMatch(/^error: server not running \(no \/other\/note\.json;/);
 });
+
+test("a mistyped status filter is refused", async () => {
+  const run = await cli(["board", "--status", "workng"], { board: fixtureBoard() });
+  expect([run.code, run.err, run.out]).toEqual([1, 'error: "workng" is not a valid agent status', ""]);
+});
+
+test("a failure is always exactly one line, whatever the text in it", async () => {
+  const board = fixtureBoard();
+  board.lanes[0].name = "Back\nlog\x1b[2J";
+  const lookup = await cli(["board", "--lane", "Nope"], { board });
+  expect(lookup.err).toBe('error: Lane "Nope" not found (lanes: Back log [2J, In progress, Done)');
+  const usage = await cli(["add", "backlog", "T", "--description", "-x y"], { board });
+  expect(usage.code).toBe(2);
+  expect(usage.err.split("\n")).toHaveLength(1);
+  expect(usage.err).toMatch(/^error: .*--description/);
+});
+
+test("confirmations stay on one line too", async () => {
+  const board = fixtureBoard();
+  board.lanes[0].cards[0].title = "Seven\n#99 deleted: Other";
+  expect((await cli(["delete", "7"], { board })).out).toBe("#7 deleted: Seven #99 deleted: Other");
+  const moved = fixtureBoard();
+  moved.lanes[2].name = "Done\n#1 moved";
+  expect((await cli(["move", "7", "done\n#1 moved"], { board: moved })).out).toBe("#7 moved to Done #1 moved");
+});
