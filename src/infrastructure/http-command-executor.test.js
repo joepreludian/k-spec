@@ -60,3 +60,64 @@ test("an unreachable server is a CommandFailed", async () => {
   });
   await expect(executor.execute("createCard", {})).rejects.toBeInstanceOf(CommandFailed);
 });
+
+// --- a caller outside the browser (the CLI) ---------------------------------
+
+const remote = (fetch) => createHttpCommandExecutor({ fetch, baseUrl: "http://k.test", token: "tok" });
+
+test("a remote caller sends the base URL, the token cookie and refuses redirects", async () => {
+  const fetch = vi.fn(async () => response(200, { version: 2 }));
+  await remote(fetch).execute("endWork", { cardId: "c" });
+  const [url, options] = fetch.mock.calls[0];
+  expect(url).toBe("http://k.test/api/commands/endWork");
+  expect(options.headers).toEqual({ "Content-Type": "application/json", Cookie: "k-spec-token=tok" });
+  expect(options.redirect).toBe("manual");
+});
+
+test("the browser's request is unchanged", async () => {
+  const fetch = vi.fn(async () => response(200, {}));
+  await createHttpCommandExecutor({ fetch }).execute("endWork", {});
+  expect(fetch.mock.calls[0]).toEqual([
+    "/api/commands/endWork",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+  ]);
+});
+
+test.each([
+  ["unreachable", async () => { throw new TypeError("refused"); }],
+  ["rejected", async () => response(307, null, { type: null })],
+  ["rejected", async () => response(200, {}, { redirected: true })],
+  ["unexpected", async () => response(200, {}, { type: "text/html" })],
+  ["unexpected", async () => response(500, { error: "Command failed" })],
+])("a failure says why: %s", async (reason, fetch) => {
+  const failure = { name: "CommandFailed", reason, message: "Could not save the change" };
+  await expect(remote(fetch).execute("endWork", {})).rejects.toMatchObject(failure);
+  await expect(remote(fetch).getBoard()).rejects.toMatchObject({ name: "CommandFailed", reason });
+});
+
+test("a command the server does not know is told apart", async () => {
+  const fetch = async () => response(404, { error: "Unknown command: nope" });
+  await expect(remote(fetch).execute("nope", {})).rejects.toMatchObject({ reason: "unknown-command" });
+  await expect(remote(fetch).getBoard()).rejects.toMatchObject({ reason: "unexpected" });
+});
+
+test("getBoard asks for the board with the token and resolves it with its version", async () => {
+  const fetch = vi.fn(async () => response(200, { board: { id: "b" }, version: 3 }));
+  expect(await remote(fetch).getBoard()).toEqual({ board: { id: "b" }, version: 3 });
+  expect(fetch.mock.calls[0]).toEqual([
+    "http://k.test/api/board",
+    { headers: { Cookie: "k-spec-token=tok" }, redirect: "manual" },
+  ]);
+});
+
+test("getBoard refuses an answer without a board", async () => {
+  for (const body of [{ hello: 1 }, { board: null, version: 1 }, { board: "x" }, null]) {
+    await expect(remote(async () => response(200, body)).getBoard()).rejects.toMatchObject({ reason: "unexpected" });
+  }
+});
+
+test("an answer that claims json but is not is unexpected", async () => {
+  const broken = { ...response(200, {}), json: async () => { throw new SyntaxError("bad json"); } };
+  await expect(remote(async () => broken).execute("endWork", {})).rejects.toMatchObject({ reason: "unexpected" });
+  await expect(remote(async () => broken).getBoard()).rejects.toMatchObject({ reason: "unexpected" });
+});
