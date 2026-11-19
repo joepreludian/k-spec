@@ -19,6 +19,9 @@ docs/specs/
 # sqlite database (the committed state is data/k-spec.dump.json)
 data/*.db*
 
+# the running server's address and token, read by the CLI
+data/k-spec.server.json
+
 # misc
 *.log
 .DS_Store

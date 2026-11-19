@@ -1,4 +1,4 @@
-/** Runs once when the Next.js server starts: prints the access link and arranges the dump on shutdown. */
+/** Runs once when the Next.js server starts: prints the access link, leaves the CLI its note and arranges the dump on shutdown. */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { resolveToken } = await import("./infrastructure/access/token.js");
@@ -6,6 +6,10 @@ export async function register() {
   const host = process.env.K_SPEC_HOST ?? "localhost";
   const port = process.env.PORT ?? "3000";
   console.log(`\n  k-spec board: http://${host}:${port}/?token=${token}\n`);
+
+  // Leave the CLI a note with this server's address and token; it is removed on exit.
+  const { announceServer } = await import("./infrastructure/server-note.js");
+  announceServer({ token });
 
   // Open the board store now: a dump that cannot be imported stops the server here, file named.
   const { registerShutdownDump, startServerStore } = await import("./infrastructure/store/server-store.js");
