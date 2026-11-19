@@ -6,9 +6,10 @@ import { ConnectionError, resolveConnection } from "./connection.js";
 import { UsageError } from "./errors.js";
 import { READ_COMMANDS } from "./read-commands.js";
 import { usageText } from "./usage.js";
+import { WRITE_COMMANDS } from "./write-commands.js";
 
 /** Every command the CLI has, by name. */
-export const COMMAND_HANDLERS = Object.freeze({ ...READ_COMMANDS });
+export const COMMAND_HANDLERS = Object.freeze({ ...READ_COMMANDS, ...WRITE_COMMANDS });
 
 export const USAGE = usageText(COMMAND_HANDLERS);
 

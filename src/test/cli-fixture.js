@@ -7,9 +7,11 @@ import { boardOf } from "./board-server.js";
 const NOW = "2026-11-10T10:00:00.000Z";
 
 async function build() {
-  const repository = createInMemoryBoardRepository(
-    boardOf({ Backlog: ["7:Seven"], "In progress": ["4:Four"], Done: [] }),
-  );
+  // boardOf leaves the counter after the last card it made (#4); a real board counts on from its highest.
+  const repository = createInMemoryBoardRepository({
+    ...boardOf({ Backlog: ["7:Seven"], "In progress": ["4:Four"], Done: [] }),
+    nextCardNumber: 8,
+  });
   const deps = { repository, clock: fixedClock(NOW), idGenerator: sequentialIdGenerator("fx") };
   const run = (name, input) => COMMANDS[name](deps, input);
   const cardId = "card-4";

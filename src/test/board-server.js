@@ -56,6 +56,8 @@ const json = (status, body) => ({
  * and `POST /api/commands/<name>`, which runs the real use case on the server's board and bumps
  * the version. `serve(board, version)` is another client changing the board; `offline = true`
  * makes every request fail; `hold()` keeps answers back until the returned function is called;
+ * `afterRead(server)` runs once after the next board read (another client getting in between);
+ * `refuse(name)` makes a command answer 422; `deps` is what its use cases run with.
  * `calls(path)` counts requests and `requests` lists them as `{ method, path, input }`.
  *
  * For a caller outside the browser, `{ baseUrl, token }` make it one origin behind the access
@@ -68,6 +70,11 @@ export function installBoardServer(board, version = 1, { baseUrl = "", token = n
     offline: false,
     gate: null,
     requests: [],
+    afterRead: null,
+    refuse: null,
+    get deps() {
+      return { ...deps, repository: server.repository };
+    },
     repository: createInMemoryBoardRepository(board),
     serve(nextBoard, nextVersion) {
       server.version = nextVersion;
@@ -91,14 +98,21 @@ export function installBoardServer(board, version = 1, { baseUrl = "", token = n
     const method = options?.method ?? "GET";
     const input = method === "POST" ? (parseInput(options.body) ?? undefined) : undefined;
     server.requests.push({ method, path: url, input });
-    if (url === "/api/board") return json(200, { board: await server.repository.load(), version: server.version });
+    if (url === "/api/board") {
+      const response = json(200, { board: await server.repository.load(), version: server.version });
+      const hook = server.afterRead;
+      server.afterRead = null;
+      if (hook) await hook(server);
+      return response;
+    }
     if (url === "/api/board/version") return json(200, { version: server.version });
     if (url.startsWith("/api/commands/") && options?.method === "POST") {
       const name = url.slice("/api/commands/".length);
       if (!isCommand(name)) return json(404, { error: `Unknown command: ${name}` });
       if (!input) return json(400, { error: "Body must be a JSON object" });
       try {
-        const result = await COMMANDS[name]({ ...deps, repository: server.repository }, input);
+        if (server.refuse?.(name)) throw new DomainError("Refused by the test", "REFUSED");
+        const result = await COMMANDS[name](server.deps, input);
         server.version += 1;
         return json(200, { ...result, version: server.version });
       } catch (error) {
