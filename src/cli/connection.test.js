@@ -38,6 +38,23 @@ test("no note means the server is not running, with what to do", () => {
   expect(() => resolve({}, null)).toThrow(ConnectionError);
 });
 
+test("whoever runs the CLI can say how the server is started here", () => {
+  const hint = "docker compose -f .k-spec/compose.yaml up -d";
+  const attempt = () => resolve({ K_SPEC_START_HINT: ` ${hint} ` }, null);
+  expect(attempt).toThrow(`server not running (no /p/data/k-spec.server.json; start it with ${hint})`);
+  let error;
+  try {
+    attempt();
+  } catch (caught) {
+    error = caught;
+  }
+  expect(error).toBeInstanceOf(ConnectionError);
+  expect(error.transient).toBe(true);
+  expect(() => resolve({ K_SPEC_START_HINT: "  " }, null)).toThrow(
+    "server not running (no /p/data/k-spec.server.json; start it with npm run dev, or set K_SPEC_URL and K_SPEC_TOKEN)",
+  );
+});
+
 test.each(["not json", "[]", "null", '{"url":"http://x"}', '{"token":"t"}', '{"url":"","token":"t"}', '{"url":1,"token":"t"}'])(
   "a broken note names the file: %s",
   (text) => expect(() => resolve({}, text)).toThrow("cannot read the server note: /p/data/k-spec.server.json"),

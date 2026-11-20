@@ -25,7 +25,7 @@ function address(value) {
   return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, "");
 }
 
-function fromNote(noteFile, readFile) {
+function fromNote(noteFile, readFile, startHint) {
   const unreadable = () => new ConnectionError(`cannot read the server note: ${noteFile}`, { transient: true });
   let content;
   try {
@@ -34,10 +34,8 @@ function fromNote(noteFile, readFile) {
     throw unreadable();
   }
   if (content === null) {
-    throw new ConnectionError(
-      `server not running (no ${noteFile}; start it with npm run dev, or set K_SPEC_URL and K_SPEC_TOKEN)`,
-      { transient: true },
-    );
+    const how = startHint || "npm run dev, or set K_SPEC_URL and K_SPEC_TOKEN";
+    throw new ConnectionError(`server not running (no ${noteFile}; start it with ${how})`, { transient: true });
   }
   let note;
   try {
@@ -55,9 +53,11 @@ function fromNote(noteFile, readFile) {
  * `K_SPEC_URL` (with `K_SPEC_TOKEN`) when set; otherwise the note the running server leaves at
  * `noteFile`. `K_SPEC_TOKEN` on its own is the server's "fix the token" setting, so it is ignored.
  * `readFile(path)` returns the file's text, or null when there is no such file.
+ * `K_SPEC_START_HINT` is how the server is started where the CLI runs, for the "not running"
+ * message: a project's launcher sets it, because there the answer is not `npm run dev`.
  */
 export function resolveConnection({ env, noteFile, readFile }) {
-  if (!text(env.K_SPEC_URL)) return fromNote(noteFile, readFile);
+  if (!text(env.K_SPEC_URL)) return fromNote(noteFile, readFile, text(env.K_SPEC_START_HINT));
   const token = text(env.K_SPEC_TOKEN);
   if (!token) throw new ConnectionError("K_SPEC_URL is set but K_SPEC_TOKEN is not");
   const url = address(env.K_SPEC_URL);

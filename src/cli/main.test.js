@@ -100,6 +100,14 @@ test("no connection settings and no note says how to start", async () => {
   ]);
 });
 
+test("a launcher's start hint replaces npm run dev in that line", async () => {
+  const run = await cli(["board"], { env: { ...NO_ENV, K_SPEC_START_HINT: "docker compose -f .k-spec/compose.yaml up -d" } });
+  expect([run.code, run.err]).toEqual([
+    3,
+    "error: server not running (no /work/data/k-spec.server.json; start it with docker compose -f .k-spec/compose.yaml up -d)",
+  ]);
+});
+
 test("without K_SPEC_URL the note file is used", async () => {
   const run = await cli(["board"], { env: NO_ENV, note: { url: "http://k.test", token: "tok" } });
   expect(run.code).toBe(0);

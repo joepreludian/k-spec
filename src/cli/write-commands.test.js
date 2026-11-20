@@ -209,6 +209,17 @@ test("start uses the current branch and this machine unless told otherwise", asy
   expect(posts(named.server)[0][1].location).toEqual({ kind: "worktree", name: "a:b" });
 });
 
+test("start takes branch and host name from the environment when a launcher gives them", async () => {
+  const env = { K_SPEC_BRANCH: " feat/z ", K_SPEC_HOSTNAME: "mac" };
+  const started = await run(["start", "7"], { env, gitBranch: null });
+  expect(started.out).toBe("#7 work started on feat/z");
+  expect(posts(started.server)[0][1]).toMatchObject({ branch: "feat/z", location: { kind: "host", name: "mac" } });
+  const told = await run(["start", "7", "--branch", "b", "--location", "lima:dev"], { env });
+  expect(posts(told.server)[0][1]).toMatchObject({ branch: "b", location: { kind: "lima", name: "dev" } });
+  const blank = await run(["start", "7"], { env: { K_SPEC_BRANCH: " ", K_SPEC_HOSTNAME: "" } });
+  expect(posts(blank.server)[0][1]).toMatchObject({ branch: "feat/x", location: { kind: "host", name: "box" } });
+});
+
 test("start refuses to guess a branch or a location", async () => {
   const noBranch = await run(["start", "7"], { gitBranch: null });
   expect([noBranch.code, noBranch.err]).toEqual([2, "error: no git branch here; pass --branch <name>"]);

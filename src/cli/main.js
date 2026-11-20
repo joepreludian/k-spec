@@ -43,6 +43,9 @@ function parse(command, words) {
  * `sleep(ms)` and `signal` (an AbortSignal: aborted means "stop now"). Resolves to the exit code:
  * 0 done, 1 refused, 2 usage, 3 no connection. A failure is one `error: …` line on stderr.
  *
+ * `K_SPEC_HOSTNAME` and `K_SPEC_BRANCH` in `env` answer for `hostname()` and `gitBranch()`: a
+ * project's launcher runs the CLI in a container, where asking would describe the container.
+ *
  * A command gets `ctx.api`, already pointed at the server. One marked `lazy` gets none: it calls
  * `ctx.connect()` itself, as often as it needs, and so can outlive a restart of the server.
  */
@@ -64,7 +67,17 @@ export async function runCli({ argv, env, cwd, fetch, readFile, readStdin, stdou
     if (!Object.hasOwn(COMMAND_HANDLERS, name)) throw new UsageError(`unknown command: ${name} (try k-spec help)`);
     const command = COMMAND_HANDLERS[name];
     const args = parse(command, words);
-    const ctx = { env, out: stdout, readStdin, hostname, gitBranch, json: args.values.json === true, connect, sleep, signal };
+    const ctx = {
+      env,
+      out: stdout,
+      readStdin,
+      hostname: () => env.K_SPEC_HOSTNAME?.trim() || hostname(),
+      gitBranch: () => env.K_SPEC_BRANCH?.trim() || gitBranch(),
+      json: args.values.json === true,
+      connect,
+      sleep,
+      signal,
+    };
     if (!command.lazy) ctx.api = connect().api;
     await command.run(ctx, args);
     return 0;
