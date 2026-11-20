@@ -154,6 +154,8 @@ ok "the launcher added a card to an otherwise empty board named \"$NAME\""
 k comment 1 "Please check" --request >/dev/null || fail "the launcher could not send a request"
 watch_start "$ROOT/watch1.out"
 wait_for 60 "watch to print the request" grep -q '^request #1 Smoke card' "$ROOT/watch1.out"
+# The image's health check is the server's; a container that only runs a command must not have one.
+[ "$(docker inspect --format '{{if .State.Health}}checked{{else}}none{{end}}' "$(cli_containers)")" = none ] || fail "the watch's container runs the server's health check"
 ok "watch printed the open request"
 
 # 5. a stopped watch leaves nothing

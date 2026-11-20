@@ -64,6 +64,9 @@ const uid = process.getuid();
 const gid = process.getgid();
 const runCall = (...words) => [
   "run", "--rm", "--init", "-i",
+  // The image's health check asks for the server's /access page: in a container that only runs
+  // the command it would fail for as long as a watch lives, and start a process every second.
+  "--no-healthcheck",
   "--network", "k-spec-my-app",
   "--volumes-from", "k-spec-my-app:ro",
   "--user", `${uid}:${gid}`,

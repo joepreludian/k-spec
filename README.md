@@ -49,7 +49,7 @@ The generated files are rewritten each time `init` runs, so do not edit them; `.
 .k-spec/k-spec help
 ```
 
-Every call runs once in a short-lived container next to the board (about 0.2 s) and leaves nothing behind. The launcher reaches this project's board and no other. In Claude Code, open a session in the project and say "watch the board", or name a card ("let's refine k-spec #3"); the skill does the rest (see "Requests to the agent").
+Every call runs once in a short-lived container next to the board (about a third of a second) and leaves nothing behind. The launcher reaches this project's board and no other. In Claude Code, open a session in the project and say "watch the board", or name a card ("let's refine k-spec #3"); the skill does the rest (see "Requests to the agent").
 
 **Options of `init`.**
 

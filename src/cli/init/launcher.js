@@ -39,8 +39,10 @@ branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || branch=
 host=$(uname -n 2>/dev/null) || host=
 
 # No terminal is asked for: the output is read by programs. --init makes a closed terminal
-# (SIGHUP) end the command too, so a stopped watch never leaves a container.
+# (SIGHUP) end the command too, so a stopped watch never leaves a container. The image's health
+# check is for the server; here it would only fail, once a second at first.
 exec docker run --rm --init -i \\
+  --no-healthcheck \\
   --network "$BOARD" \\
   --volumes-from "$BOARD:ro" \\
   --user "$(id -u):$(id -g)" \\
