@@ -1,5 +1,6 @@
 // @vitest-environment node
 import fs from "node:fs";
+import { renderProjectSkill } from "./init/project-files.js";
 import { COMMAND_HANDLERS } from "./main.js";
 
 // The skill is a product file: it is written in skills/k-spec and shipped from there.
@@ -51,4 +52,26 @@ test("this repository's own sessions load the shipped skill, not a second copy",
   // A relative link: it must still point at the skill after the repository is cloned elsewhere.
   expect(fs.readlinkSync(LOADED_HERE)).toBe("../../skills/k-spec");
   expect(fs.realpathSync(`${LOADED_HERE}/SKILL.md`)).toBe(fs.realpathSync(FILE));
+});
+
+test("the skill covers a project set up by k-spec init", () => {
+  const text = fs.readFileSync(FILE, "utf8");
+  for (const phrase of [".k-spec/k-spec", "`k-spec init`", ".k-spec/data/k-spec.dump.json", "this project's board is not running"]) {
+    expect(text).toContain(phrase);
+  }
+  // There too, the board is not the agent's to start or stop.
+  expect(text).toMatch(/do not try to start, restart or stop/);
+});
+
+test("the copy init writes into a project names the launcher and changes nothing else", () => {
+  const source = fs.readFileSync(FILE, "utf8");
+  const copy = renderProjectSkill(source);
+  const [frontmatter] = source.match(/^---\n[\s\S]*?\n---\n/);
+  const rest = source.slice(frontmatter.length);
+  expect(copy.startsWith(frontmatter)).toBe(true);
+  expect(copy.endsWith(rest)).toBe(true);
+  const added = copy.slice(frontmatter.length, copy.length - rest.length);
+  expect(added).toContain("`.k-spec/k-spec watch`");
+  // The note uses no command or option the CLI lacks: the same guard as for the skill itself.
+  expect([...added.matchAll(/`k-spec ([a-z-]+)[^`]*`/g)]).toEqual([]);
 });

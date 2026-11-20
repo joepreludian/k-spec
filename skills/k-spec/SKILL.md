@@ -10,18 +10,25 @@ checklists say what "done" means, its comments are the conversation, its links a
 in the project. The user works in the browser; you work through the `k-spec` command. The board is
 a second source of truth: read the card instead of asking the user to repeat what is on it.
 
-`k-spec help` lists every command. If `k-spec` is not on the path, use `npx k-spec` in the
-k-spec project folder.
+`k-spec help` lists every command. Where the command is depends on how the project got k-spec:
 
-The command needs the running k-spec server and finds it in one of two ways: run from the
-project folder the server was started in, it reads the note the server leaves under `data/`;
-anywhere else it needs `K_SPEC_URL` and `K_SPEC_TOKEN` in the environment, which the user sets.
-If it answers `error: server not running`, `server not answering` or `token rejected`, tell the
-user; do not try to start, restart or stop the server yourself.
+- **A project set up with `k-spec init`** (it has a `.k-spec/` folder): the command is the
+  launcher `.k-spec/k-spec` at the project root, and the note at the top of that project's copy
+  of this skill says so. It runs the command in Docker and finds this project's board by
+  itself: no variables are needed, and it cannot reach any other board.
+- **The k-spec repository itself, or k-spec run from source**: `k-spec`, or `npx k-spec` in the
+  k-spec project folder if it is not on the path. Run from the project folder the server was
+  started in, it reads the note the server leaves under `data/`; anywhere else it needs
+  `K_SPEC_URL` and `K_SPEC_TOKEN` in the environment, which the user sets.
+
+The command needs the board's server running. If it answers `error: server not running`,
+`server not answering`, `token rejected` or `this project's board is not running`, tell the
+user; do not try to start, restart or stop the server or its container yourself.
 
 File paths on a card (its links) are relative to the board's project folder: the folder the
-server serves, normally the one it was started in. If you are working in a different folder,
-that is where the files are, and where a file must be for `k-spec link` to show it.
+server serves. In a project set up with `k-spec init` that is the project root; otherwise it is
+normally the folder the server was started in. If you are working in a different folder, that
+is where the files are, and where a file must be for `k-spec link` to show it.
 
 ## When the user names a card
 
@@ -110,5 +117,9 @@ Rules that are easy to get wrong:
 
 ## Never
 
-- Never edit `data/k-spec.dump.json` or the database file. Change the board through `k-spec` only.
+- Never edit the board's dump (`data/k-spec.dump.json`, or `.k-spec/data/k-spec.dump.json` in a
+  project set up with `k-spec init`) or the database file beside it. Change the board through
+  the command only.
+- Never print or commit `.k-spec/.env`: it holds the board's access token. Leave it and the
+  other files `k-spec init` wrote (`.k-spec/compose.yaml`, `.k-spec/k-spec`) as they are.
 - Never delete a card or move it to another lane unless the user asked for that.
