@@ -1,0 +1,15 @@
+# What must never reach the image: this repository's own board and settings, and anything
+# that is rebuilt inside it.
+node_modules
+.next
+out
+coverage
+.git
+.github
+data
+.env*
+docs/specs
+.superpowers
+.claude
+*.log
+.DS_Store
