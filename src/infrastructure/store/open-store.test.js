@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { seedBoard } from "@/infrastructure/seed-board.js";
+import { starterBoard } from "@/infrastructure/starter-board.js";
 import { DumpError, serializeDump } from "./board-dump.js";
 import { openStore, storePaths } from "./open-store.js";
 
@@ -68,9 +69,35 @@ test("dump() writes the dump file and load() reads it back", () => {
 });
 
 test("paths default to data/ under the working directory and follow the environment", () => {
-  expect(storePaths({}, "/x")).toEqual({ dbFile: "/x/data/k-spec.db", dumpFile: "/x/data/k-spec.dump.json" });
+  expect(storePaths({}, "/x")).toEqual({ dbFile: "/x/data/k-spec.db", dumpFile: "/x/data/k-spec.dump.json", boardName: null });
   expect(storePaths({ K_SPEC_DB: "/a/b.db", K_SPEC_DUMP: "/c/d.json" }, "/x")).toEqual({
     dbFile: "/a/b.db",
     dumpFile: "/c/d.json",
+    boardName: null,
   });
+});
+
+test("K_SPEC_BOARD_NAME names the first board; blank means none", () => {
+  expect(storePaths({ K_SPEC_BOARD_NAME: " My App " }, "/x").boardName).toBe("My App");
+  expect(storePaths({ K_SPEC_BOARD_NAME: "  " }, "/x").boardName).toBeNull();
+});
+
+test("no database, no dump and a board name: an empty board with that name", () => {
+  const store = openStore({ ...paths, boardName: "My App" });
+  expect(store.repository.readSync()).toStrictEqual(starterBoard("My App"));
+  store.close();
+});
+
+test("a dump still wins over the board name", () => {
+  writeDump(serializeDump({ ...seedBoard(), name: "Dumped" }));
+  const store = openStore({ ...paths, boardName: "My App" });
+  expect(store.repository.readSync().name).toBe("Dumped");
+  store.close();
+});
+
+test("a database that has a board keeps it when the board name changes", () => {
+  openStore({ ...paths, boardName: "First" }).close();
+  const store = openStore({ ...paths, boardName: "Second" });
+  expect(store.repository.readSync().name).toBe("First");
+  store.close();
 });

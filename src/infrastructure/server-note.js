@@ -31,12 +31,14 @@ export function removeServerNote({ file, pid }) {
 /**
  * Writes the note as the server starts and arranges its removal when the process exits (once
  * per process). The address is `localhost`: whoever can read the file is on this machine.
+ * `K_SPEC_NOTE_URL` replaces it where that is not how the reader reaches the server (a board in
+ * a container is reached by its service name from the containers that run the CLI).
  * A note that cannot be written is logged, not fatal: the board still works in the browser.
  */
 export function announceServer({ env = process.env, cwd = process.cwd(), token, pid = process.pid, on = process.on.bind(process) }) {
   const file = serverNotePath(env, cwd);
   try {
-    writeServerNote({ file, url: `http://localhost:${env.PORT ?? "3000"}`, token, pid });
+    writeServerNote({ file, url: env.K_SPEC_NOTE_URL?.trim() || `http://localhost:${env.PORT ?? "3000"}`, token, pid });
   } catch (error) {
     console.error(`Could not write the server note ${file}`, error);
     return file;

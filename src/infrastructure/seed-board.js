@@ -21,6 +21,7 @@ import {
   publishService,
 } from "@/domain/card.js";
 import { PERSON } from "@/domain/author.js";
+import { STANDARD_LANES } from "./starter-board.js";
 
 const BASE = Date.parse("2026-11-14T09:00:00.000Z");
 const at = (hoursAgo) => new Date(BASE - hoursAgo * 3600_000).toISOString();
@@ -28,14 +29,6 @@ const CLAUDE = { kind: "agent", name: "claude" };
 const MODEL = "claude-fable-5-1";
 const HOST = { kind: "host", name: "jon-mbp" };
 const MIN = 1 / 60;
-
-const LANES = [
-  ["lane-backlog", "Backlog"],
-  ["lane-todo", "Todo"],
-  ["lane-in-progress", "In Progress"],
-  ["lane-review", "Review"],
-  ["lane-done", "Done"],
-];
 
 const LABELS = [
   ["label-spec", "spec", "blue"],
@@ -188,7 +181,7 @@ export function seedBoard() {
     links: [{ id: "link-repo", title: "Repo", url: "https://github.com/opensource/k-spec" }],
     readmePath: "README.md",
   });
-  for (const [id, name] of LANES) board = addLane(board, { id, name });
+  for (const [id, name] of STANDARD_LANES) board = addLane(board, { id, name });
   for (const [id, name, color] of LABELS) board = createLabel(board, { id, name, color });
   for (const spec of CARDS) {
     const { card, labelIds } = buildCard(spec);

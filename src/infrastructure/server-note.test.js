@@ -59,6 +59,14 @@ test("announcing writes the note for localhost and removes it on exit, registeri
   expect(fs.existsSync(file)).toBe(false);
 });
 
+test("K_SPEC_NOTE_URL is the address in the note; blank means the default", () => {
+  const env = { K_SPEC_SERVER_FILE: file, PORT: "14201", K_SPEC_NOTE_URL: " http://k-spec:14201 " };
+  announceServer({ env, cwd: dir, token: "tok", pid: 7, on: vi.fn() });
+  expect(JSON.parse(fs.readFileSync(file, "utf8")).url).toBe("http://k-spec:14201");
+  announceServer({ env: { ...env, K_SPEC_NOTE_URL: "  " }, cwd: dir, token: "tok", pid: 7, on: vi.fn() });
+  expect(JSON.parse(fs.readFileSync(file, "utf8")).url).toBe("http://localhost:14201");
+});
+
 test("without PORT the note says 3000, and a note that cannot be written does not stop the server", () => {
   announceServer({ env: { K_SPEC_SERVER_FILE: file }, cwd: dir, token: "tok", pid: 7, on: vi.fn() });
   expect(JSON.parse(fs.readFileSync(file, "utf8")).url).toBe("http://localhost:3000");
