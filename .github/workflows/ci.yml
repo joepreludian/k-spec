@@ -1,0 +1,54 @@
+# Every change: the checks a developer runs, then the image, proven by the smoke script.
+# Also called by release.yml before it publishes.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # No install scripts: none is needed, and without the flag npm compiles better-sqlite3
+      # from source although the package ships its binaries (see the Dockerfile).
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  image:
+    name: Image and smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the image for this runner
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: k-spec:ci
+          # The image is told its own name; the smoke script checks that projects are pinned to it.
+          build-args: K_SPEC_IMAGE=k-spec:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Set a project up from the image and drive its board
+        run: sh scripts/smoke.sh k-spec:ci
