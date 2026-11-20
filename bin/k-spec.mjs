@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The k-spec command: gives the CLI (src/cli/main.js) the real world and exits with its code.
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import { text } from "node:stream/consumers";
@@ -9,6 +10,7 @@ import { setTimeout as wait } from "node:timers/promises";
 import "../scripts/register-alias.mjs";
 
 const { runCli } = await import("../src/cli/main.js");
+const { portIsFree } = await import("../src/infrastructure/port-check.js");
 
 function readFile(file) {
   try {
@@ -30,6 +32,26 @@ function gitBranch() {
     return null;
   }
 }
+
+// What `init` needs to set a project up: the folder it writes into and a few facts of the machine.
+const local = {
+  writeFile(file, text, mode) {
+    fs.writeFileSync(file, text, { mode });
+    fs.chmodSync(file, mode); // `mode` only applies when the file is created, and then minus the umask
+  },
+  makeDir: (dir) => fs.mkdirSync(dir, { recursive: true }),
+  isSymlink(file) {
+    try {
+      return fs.lstatSync(file).isSymbolicLink();
+    } catch {
+      return false;
+    }
+  },
+  user: () => ({ uid: process.getuid(), gid: process.getgid() }),
+  randomBytes,
+  portIsFree,
+  readSkill: () => fs.readFileSync(new URL("../skills/k-spec/SKILL.md", import.meta.url), "utf8"),
+};
 
 // A command that waits (`watch`) stops when the process is told to: the signal ends its sleep
 // and any request under way, and the command returns instead of being cut off mid-line.
@@ -57,6 +79,7 @@ try {
     gitBranch,
     sleep: (ms) => wait(ms, undefined, { signal: stopping.signal }).catch(() => {}),
     signal: stopping.signal,
+    local,
   });
 } catch (error) {
   process.stderr.write(`error: ${error.message}\n`);

@@ -3,7 +3,8 @@ import { parseArgs } from "node:util";
 import { DomainError } from "@/domain/errors.js";
 import { createHttpCommandExecutor } from "@/infrastructure/http-command-executor.js";
 import { connectionTrouble, resolveConnection } from "./connection.js";
-import { UsageError } from "./errors.js";
+import { Refused, UsageError } from "./errors.js";
+import { INIT_COMMANDS } from "./init/init-command.js";
 import { READ_COMMANDS } from "./read-commands.js";
 import { oneLine } from "./render.js";
 import { usageText } from "./usage.js";
@@ -11,7 +12,7 @@ import { WATCH_COMMANDS } from "./watch.js";
 import { WRITE_COMMANDS } from "./write-commands.js";
 
 /** Every command the CLI has, by name. */
-export const COMMAND_HANDLERS = Object.freeze({ ...READ_COMMANDS, ...WATCH_COMMANDS, ...WRITE_COMMANDS });
+export const COMMAND_HANDLERS = Object.freeze({ ...READ_COMMANDS, ...WATCH_COMMANDS, ...WRITE_COMMANDS, ...INIT_COMMANDS });
 
 export const USAGE = usageText(COMMAND_HANDLERS);
 
@@ -48,8 +49,12 @@ function parse(command, words) {
  *
  * A command gets `ctx.api`, already pointed at the server. One marked `lazy` gets none: it calls
  * `ctx.connect()` itself, as often as it needs, and so can outlive a restart of the server.
+ *
+ * `local` is the machine as `init`, the one command that writes files, needs it:
+ * `writeFile(file, text, mode)`, `makeDir(dir)`, `isSymlink(file)`, `user()` (`{ uid, gid }`),
+ * `randomBytes(n)`, `portIsFree(port)` (a promise) and `readSkill()` (the shipped skill's text).
  */
-export async function runCli({ argv, env, cwd, fetch, readFile, readStdin, stdout, stderr, hostname, gitBranch, sleep, signal }) {
+export async function runCli({ argv, env, cwd, fetch, readFile, readStdin, stdout, stderr, hostname, gitBranch, sleep, signal, local }) {
   const [name, ...words] = argv;
   if (name === undefined || HELP.has(name)) {
     stdout(USAGE);
@@ -69,6 +74,9 @@ export async function runCli({ argv, env, cwd, fetch, readFile, readStdin, stdou
     const args = parse(command, words);
     const ctx = {
       env,
+      cwd,
+      readFile,
+      local,
       out: stdout,
       readStdin,
       hostname: () => env.K_SPEC_HOSTNAME?.trim() || hostname(),
@@ -87,7 +95,7 @@ export async function runCli({ argv, env, cwd, fetch, readFile, readStdin, stdou
       return code;
     };
     if (error instanceof UsageError) return fail(2, error.message);
-    if (error instanceof DomainError) return fail(1, error.message);
+    if (error instanceof DomainError || error instanceof Refused) return fail(1, error.message);
     const trouble = connectionTrouble(error, url);
     if (trouble !== null) return fail(3, trouble);
     throw error;

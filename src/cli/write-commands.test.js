@@ -14,7 +14,7 @@ test("usage names every command", () => {
     expect(USAGE).toContain(`  ${command.usage}`);
   }
   expect(Object.keys(COMMAND_HANDLERS)).toEqual([
-    "board", "show", "watch", "comment", "status", "move", "check", "uncheck", "add", "delete", "start", "end", "link", "publish", "unpublish", "run",
+    "board", "show", "watch", "comment", "status", "move", "check", "uncheck", "add", "delete", "start", "end", "link", "publish", "unpublish", "run", "init",
   ]);
 });
 
