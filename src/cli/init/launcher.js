@@ -5,8 +5,9 @@
  * works from any directory, and it never takes a server address or token from the caller: this
  * project's board is the only one it can talk to.
  *
- * `image`, `slug` and `projectId` are written as single-quoted shell words; the caller makes
- * sure none of them holds a quote.
+ * `image`, `slug` and `projectId` are written as single-quoted shell words, so none of them may
+ * hold a quote: `init` checks the image name, and takes an id and a slug only in the form it
+ * generates itself (`readComposeHeader`), also when they come from a committed file.
  */
 export function renderLauncher({ image, slug, projectId }) {
   return `#!/bin/sh

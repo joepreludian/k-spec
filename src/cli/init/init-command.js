@@ -87,7 +87,13 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
     gitignore: path.join(dir, ".gitignore"),
     settings: path.join(dir, ".env"),
   };
-  const known = readComposeHeader(readFile(files.compose) ?? "");
+  const composeText = readFile(files.compose);
+  const known = readComposeHeader(composeText ?? "");
+  // A compose file that is there but is not recognisably init's is never taken over: it may be
+  // the person's own, or a project whose identity would silently be replaced by a new one.
+  if (composeText !== null && known === null) {
+    throw new Refused(`${files.compose} was not written by k-spec init, or its first line was changed (restore it from git, or move it away)`);
+  }
   const settingsText = readFile(files.settings);
   const stored = readEnv(settingsText ?? "");
 
@@ -95,6 +101,8 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
   const projectId = known?.id ?? hex(local.randomBytes(8));
   const renamed = known !== null && name !== known.name;
   const slug = known !== null && !renamed ? known.slug : slugOf(name) || `p${projectId.slice(0, 8)}`;
+  // Only a new slug moves the container; "My App" to "my app" changes the name and nothing in Docker.
+  const movedFrom = known !== null && slug !== known.slug ? `k-spec-${known.slug}` : null;
   const host = values.host === undefined ? null : hostName(values.host);
   const port = await boardPort(values.port, stored[ENV_KEYS.port], local);
 
@@ -138,14 +146,16 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
   const toCommit = [".k-spec/compose.yaml", ".k-spec/k-spec", ".k-spec/.gitignore", ...(skillLinked ? [] : [".claude/skills/k-spec/SKILL.md"])];
   out(
     [
-      `k-spec is set up for "${oneLine(name)}" (board k-spec-${slug}, port ${port ?? stored[ENV_KEYS.port]}).`,
+      `k-spec is set up for "${oneLine(name)}" (board k-spec-${slug}, port ${port ?? stored[ENV_KEYS.port]}, image ${image}).`,
       "",
       "Start the board:   docker compose -f .k-spec/compose.yaml up -d --wait",
       "Access link:       docker compose -f .k-spec/compose.yaml logs k-spec",
       `Commit:            ${toCommit.join(" ")}`,
       "                   and .k-spec/data/k-spec.dump.json once the board has written it",
       ...(skillLinked ? ["", "Skill not written: .claude/skills/k-spec is a link."] : []),
-      ...(renamed ? ["", `The board was k-spec-${known.slug} until now. If it is still there, remove it first: docker rm -f k-spec-${known.slug}`] : []),
+      ...(movedFrom === null
+        ? []
+        : ["", `The board's container was ${movedFrom} until now. To move it to k-spec-${slug}: stop any running watch, then docker compose -f .k-spec/compose.yaml up -d`]),
     ].join("\n"),
   );
 }

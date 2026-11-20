@@ -72,6 +72,6 @@ test("the copy init writes into a project names the launcher and changes nothing
   expect(copy.endsWith(rest)).toBe(true);
   const added = copy.slice(frontmatter.length, copy.length - rest.length);
   expect(added).toContain("`.k-spec/k-spec watch`");
-  // The note uses no command or option the CLI lacks: the same guard as for the skill itself.
-  expect([...added.matchAll(/`k-spec ([a-z-]+)[^`]*`/g)]).toEqual([]);
+  // The note names no command the CLI lacks: the same guard as for the skill itself.
+  for (const [, name] of added.matchAll(/`k-spec ([a-z-]+)[^`]*`/g)) expect(Object.keys(COMMAND_HANDLERS)).toContain(name);
 });

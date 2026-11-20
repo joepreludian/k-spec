@@ -1,4 +1,8 @@
 // @vitest-environment node
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
   ENV_KEYS,
   mergeEnv,
@@ -10,7 +14,8 @@ import {
   slugOf,
 } from "./project-files.js";
 
-const project = (name, slug = slugOf(name)) => ({ image: "k-spec:dev", name, slug, projectId: "abc123" });
+const ID = "0123456789abcdef";
+const project = (name, slug = slugOf(name)) => ({ image: "k-spec:dev", name, slug, projectId: ID });
 
 test.each([
   ["My App", "my-app"],
@@ -45,7 +50,7 @@ test("the compose file is the board service the project runs", () => {
     '      K_SPEC_NOTE_URL: "http://k-spec:${K_SPEC_BOARD_PORT:?}"',
     "      - ./data:/data",
     "      - ..:/project:ro",
-    '      k-spec.project: "abc123"',
+    `      k-spec.project: "${ID}"`,
     "    name: k-spec-my-app",
   ]) {
     expect(lines).toContain(line);
@@ -61,7 +66,7 @@ const ODD_NAMES = ["My App", `a "q" 'p' #x: y`, "cost $5 `now` $(id)", "Ünïcod
 test.each(ODD_NAMES)("the project can be read back from the compose file: %s", (name) => {
   const slug = slugOf(name) || "p12345678";
   const text = renderCompose(project(name, slug));
-  expect(readComposeHeader(text)).toEqual({ id: "abc123", name, slug });
+  expect(readComposeHeader(text)).toEqual({ id: ID, name, slug });
   expect(text.split("\n")[0].startsWith("# k-spec-project: ")).toBe(true);
 });
 
@@ -86,16 +91,69 @@ test.each([
   ["nothing", ""],
   ["a compose file someone wrote", "services:\n  web:\n    image: x\n"],
   ["broken JSON", "# k-spec-project: {nope\nservices:\n"],
-  ["a missing field", '# k-spec-project: {"id":"a","name":"n"}\n'],
-  ["a field of the wrong kind", '# k-spec-project: {"id":"a","name":"n","slug":5}\n'],
+  ["a missing field", `# k-spec-project: {"id":"${ID}","name":"n"}\n`],
+  ["a field of the wrong kind", `# k-spec-project: {"id":"${ID}","name":"n","slug":5}\n`],
   ["an empty id", '# k-spec-project: {"id":"","name":"n","slug":"s"}\n'],
-  ["a header that is not first", 'x\n# k-spec-project: {"id":"a","name":"n","slug":"s"}\n'],
+  ["a header that is not first", `x\n# k-spec-project: {"id":"${ID}","name":"n","slug":"s"}\n`],
   ["JSON that is not an object", "# k-spec-project: null\n"],
 ])("no project is read from %s", (_, text) => expect(readComposeHeader(text)).toBeNull());
+
+// The id and the slug end up in a shell script and in YAML, and this line can come from a
+// repository someone else wrote: only what init itself would have generated is taken.
+test.each([
+  ["an id that closes the launcher's quote", { id: "x'; touch INJECTED; : '", slug: "app" }],
+  ["an id that adds YAML keys", { id: 'a"\n    privileged: true\n    pid: "host', slug: "app" }],
+  ["an id that is not 16 hex characters", { id: "abc123", slug: "app" }],
+  ["an id in upper case", { id: "0123456789ABCDEF", slug: "app" }],
+  ["a slug that closes the launcher's quote", { id: ID, slug: "a'; touch INJECTED; : '" }],
+  ["a slug with a space", { id: ID, slug: "my app" }],
+  ["a slug in upper case", { id: ID, slug: "My-App" }],
+  ["a slug that starts with a dash", { id: ID, slug: "-app" }],
+  ["a slug that ends with a dash", { id: ID, slug: "app-" }],
+  ["a slug of 41 characters", { id: ID, slug: "a".repeat(41) }],
+  ["a slug with a newline", { id: ID, slug: "app\nx" }],
+])("no project is read from a header with %s", (_, { id, slug }) => {
+  expect(readComposeHeader(`# k-spec-project: ${JSON.stringify({ id, name: "Team App", slug })}\nservices:\n`)).toBeNull();
+});
+
+test("what init generates is always read back: a fallback slug, the longest slug", () => {
+  for (const slug of ["p01234567", "a".repeat(40), "a-b-c", "x"]) {
+    expect(readComposeHeader(renderCompose(project("Any", slug)))).toEqual({ id: ID, name: "Any", slug });
+  }
+});
 
 test("the settings file is read line by line; anything that is not KEY=VALUE is skipped", () => {
   expect(readEnv("# c\nA=1\n\nB=x=y\r\nnot a line\n  C = spaced  \n=nokey\n")).toEqual({ A: "1", B: "x=y", C: "spaced" });
   expect(readEnv("")).toEqual({});
+});
+
+test("the settings file is read the way Compose reads it: export, quotes, a comment after the value", () => {
+  const text = [
+    "export A=exported",
+    "B=14271   # the port I like",
+    'C="double quoted"',
+    "D='single quoted'",
+    "E=tok#en-with-hash",
+    "F=",
+    'G="quoted # not a comment"   # a comment',
+    "export   H = spaced",
+  ].join("\n");
+  expect(readEnv(text)).toEqual({
+    A: "exported",
+    B: "14271",
+    C: "double quoted",
+    D: "single quoted",
+    E: "tok#en-with-hash",
+    F: "",
+    G: "quoted # not a comment",
+    H: "spaced",
+  });
+});
+
+test("a key written with export is changed in place, not added a second time", () => {
+  const before = "export K_SPEC_BOARD_TOKEN=tok\nK_SPEC_BOARD_PORT=14271   # the port I like\n";
+  expect(mergeEnv(before, { K_SPEC_BOARD_TOKEN: "new" })).toBe("export K_SPEC_BOARD_TOKEN=new\nK_SPEC_BOARD_PORT=14271   # the port I like\n");
+  expect(mergeEnv(before, { K_SPEC_BOARD_PORT: "15000" })).toBe("export K_SPEC_BOARD_TOKEN=tok\nK_SPEC_BOARD_PORT=15000\n");
 });
 
 test("the settings keys are not names the server or the CLI read", () => {
@@ -153,6 +211,29 @@ test("the ignore file keeps the settings, the database and the server's note out
   for (const line of [".env", "data/*.db*", "data/k-spec.server.json"]) expect(lines).toContain(line);
   expect(lines).not.toContain("data/k-spec.dump.json");
   expect(lines).not.toContain("data/");
+  // Like every generated file, it says who writes it and that editing it is pointless.
+  expect(lines[0]).toMatch(/^# .*k-spec init.*rewritten/);
+});
+
+const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8" });
+const hasGit = git(os.tmpdir(), "--version").status === 0;
+
+// A project's own .gitignore often has a rule like `data/`. It must not take the board's dump
+// out of git without anyone noticing: the dump is the part of the board that is committed.
+test.skipIf(!hasGit).each([["data/"], ["data"], ["**/data/"], ["*.json\ndata/"]])("the dump is committed even when the project ignores %j", (rootRule) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kspec-ignore-"));
+  try {
+    expect(git(dir, "init", "-q").status).toBe(0);
+    fs.writeFileSync(path.join(dir, ".gitignore"), `${rootRule}\n`);
+    fs.mkdirSync(path.join(dir, ".k-spec/data"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".k-spec/.gitignore"), renderGitignore());
+    const files = [".k-spec/data/k-spec.dump.json", ".k-spec/data/k-spec.db", ".k-spec/data/k-spec.db-wal", ".k-spec/data/k-spec.server.json", ".k-spec/.env"];
+    for (const file of files) fs.writeFileSync(path.join(dir, file), "");
+    const ignored = files.filter((file) => git(dir, "check-ignore", "-q", file).status === 0);
+    expect(ignored).toEqual(files.slice(1));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("a project's copy of the skill says, right after the front matter, that the command is the launcher", () => {
@@ -162,6 +243,8 @@ test("a project's copy of the skill says, right after the front matter, that the
   expect(copy.startsWith(start)).toBe(true);
   expect(copy).toContain("`.k-spec/k-spec watch`");
   expect(copy).toContain(".k-spec/data/");
+  // Whoever edits the copy must learn that the next init overwrites it.
+  expect(copy).toMatch(/written by `k-spec init`[^.]*rewritten/);
   expect(copy.endsWith("\n\n# Title\nbody `k-spec board`\n")).toBe(true);
   expect(() => renderProjectSkill("# no front matter\n")).toThrow("the skill has no front matter");
 });

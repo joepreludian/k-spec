@@ -4,7 +4,7 @@
 /** A name reduced to what Docker accepts in a container name: `[a-z0-9-]`, at most 40 characters. May be empty. */
 export function slugOf(name) {
   const trim = (text) => text.replace(/^-+|-+$/g, "");
-  return trim(trim(name.toLowerCase().replace(/[^a-z0-9]+/g, "-")).slice(0, 40));
+  return trim(trim(name.toLowerCase().replace(/[^a-z0-9]+/g, "-")).slice(0, SLUG_LIMIT));
 }
 
 const HEADER = "# k-spec-project: ";
@@ -48,9 +48,19 @@ networks:
 `;
 }
 
-const filled = (value) => typeof value === "string" && value.length > 0;
+// What init itself generates, and nothing else: the id and the slug are written into a shell
+// script and a YAML file, and the line they are read from may come from someone else's repository.
+const PROJECT_ID = /^[0-9a-f]{16}$/;
+const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const SLUG_LIMIT = 40;
 
-/** The project a compose file written by `renderCompose` belongs to: `{ id, name, slug }`, or null for any other text. */
+const filled = (value) => typeof value === "string" && value.length > 0;
+const matches = (value, pattern) => typeof value === "string" && pattern.test(value);
+
+/**
+ * The project a compose file written by `renderCompose` belongs to: `{ id, name, slug }`, or
+ * null for any other text, including a header whose id or slug is not in the form init writes.
+ */
 export function readComposeHeader(text) {
   const [first] = text.split("\n");
   if (!first.startsWith(HEADER)) return null;
@@ -62,12 +72,27 @@ export function readComposeHeader(text) {
   }
   if (typeof project !== "object" || project === null) return null;
   const { id, name, slug } = project;
-  return filled(id) && filled(name) && filled(slug) ? { id, name, slug } : null;
+  const valid = matches(id, PROJECT_ID) && matches(slug, SLUG) && slug.length <= SLUG_LIMIT && filled(name);
+  return valid ? { id, name, slug } : null;
 }
 
-/** `.k-spec/.gitignore`: what stays on this machine. The dump next to the database is what gets committed. */
+/**
+ * `.k-spec/.gitignore`: what stays on this machine. The dump next to the database is what gets
+ * committed, and the first two rules keep it so: a project's own .gitignore often ignores every
+ * folder called `data`, which would take the board out of git without anyone noticing.
+ */
 export function renderGitignore() {
-  return ["# Written by `k-spec init`. The board's dump (data/k-spec.dump.json) is the part to commit.", ".env", "data/*.db*", "data/k-spec.server.json", ""].join("\n");
+  return [
+    "# Written by `k-spec init` and rewritten every time it runs: do not edit.",
+    "# The board's dump (data/k-spec.dump.json) is the part of the board that is committed. The two",
+    "# rules below keep it so even when the project's own .gitignore ignores a folder called data.",
+    "!data/",
+    "!data/k-spec.dump.json",
+    ".env",
+    "data/*.db*",
+    "data/k-spec.server.json",
+    "",
+  ].join("\n");
 }
 
 /**
@@ -83,14 +108,30 @@ export const ENV_KEYS = Object.freeze({
   project: "K_SPEC_BOARD_PROJECT",
 });
 
-const ENV_LINE = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/;
+// `KEY=VALUE`, as Compose reads it: `export` in front is allowed.
+const ENV_LINE = /^\s*(export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/;
+const envLine = (line) => ENV_LINE.exec(line.replace(/\r$/, "")) ?? [];
 
-/** The `KEY=VALUE` lines of a settings file as an object; comments and anything else are skipped. */
+/** A value as Compose takes it: without its quotes, or without the comment that follows it after white space. */
+function envValue(raw) {
+  const text = raw.trim();
+  const quote = text[0];
+  if (quote === '"' || quote === "'") {
+    const end = text.indexOf(quote, 1);
+    if (end > 0) return text.slice(1, end);
+  }
+  return text.replace(/\s+#.*$/, "").trim();
+}
+
+/**
+ * The `KEY=VALUE` lines of a settings file as an object, read the way Compose reads them, so
+ * that init and the board agree on what the file says. Comments and anything else are skipped.
+ */
 export function readEnv(text) {
   const values = {};
   for (const line of text.split("\n")) {
-    const [, key, value] = ENV_LINE.exec(line.replace(/\r$/, "")) ?? [];
-    if (key) values[key] = value.trim();
+    const [, , key, value] = envLine(line);
+    if (key) values[key] = envValue(value);
   }
   return values;
 }
@@ -111,10 +152,10 @@ export function mergeEnv(text, values) {
   const lines = text === null ? [...ENV_HEADER] : text.replace(/\n$/, "").split("\n");
   const pending = new Set(Object.keys(values));
   const merged = lines.map((line) => {
-    const [, key] = ENV_LINE.exec(line.replace(/\r$/, "")) ?? [];
+    const [, exported = "", key] = envLine(line);
     if (!key || !pending.has(key)) return line;
     pending.delete(key);
-    return `${key}=${values[key]}`;
+    return `${exported}${key}=${values[key]}`;
   });
   for (const key of [...pending].sort(order)) merged.push(`${key}=${values[key]}`);
   return `${merged.join("\n")}\n`;
@@ -127,6 +168,9 @@ const PROJECT_NOTE = `
 > runs the command in Docker against this project's own board. Wherever this skill writes
 > \`k-spec <something>\`, run \`.k-spec/k-spec <something>\` from the project root; the Monitor
 > command is \`.k-spec/k-spec watch\`. The board's dump and database are in \`.k-spec/data/\`.
+>
+> This copy is written by \`k-spec init\` and rewritten every time it runs: change the skill in
+> k-spec itself, not here.
 `;
 
 /** The skill as a project gets it: the source, with one note after the front matter saying where the command is. */

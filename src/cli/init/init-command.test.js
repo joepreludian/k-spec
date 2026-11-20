@@ -102,7 +102,7 @@ test("a fresh folder gets the board's files, its own settings, and the next step
   expect(env.K_SPEC_BOARD_TOKEN).toMatch(/^[A-Za-z0-9_-]{32}$/);
   expect(env.K_SPEC_BOARD_PROJECT).toMatch(/^k-spec-my-app-[0-9a-f]{6}$/);
 
-  expect(result.out).toContain(`k-spec is set up for "My App" (board k-spec-my-app, port ${env.K_SPEC_BOARD_PORT}).`);
+  expect(result.out.split("\n")[0]).toBe(`k-spec is set up for "My App" (board k-spec-my-app, port ${env.K_SPEC_BOARD_PORT}, image k-spec:dev).`);
   expect(result.out).toContain("docker compose -f .k-spec/compose.yaml up -d --wait");
   expect(result.out).toContain("docker compose -f .k-spec/compose.yaml logs k-spec");
   expect(result.out).toContain(".k-spec/compose.yaml .k-spec/k-spec .k-spec/.gitignore .claude/skills/k-spec/SKILL.md");
@@ -208,11 +208,86 @@ test("--name on a later run renames the board and says how to remove the old one
   expect(f.text(".k-spec/compose.yaml")).toContain("container_name: k-spec-other-name\n");
   expect(f.text(".k-spec/k-spec")).toContain("BOARD='k-spec-other-name'");
   expect(f.text(".k-spec/.env")).toBe(before.env);
-  expect(renamed.out).toContain("docker rm -f k-spec-my-app");
+  // The container moves to its new name on the next `up`; a watch still attached to the old
+  // network would stop that half way, so the person is told about both.
+  const hint = renamed.out.split("\n").find((line) => line.includes("k-spec-my-app"));
+  expect(hint).toContain("docker compose -f .k-spec/compose.yaml up -d");
+  expect(hint).toMatch(/watch/);
+  expect(renamed.out).not.toContain("docker rm");
   // Giving the name it already has is not a rename.
   const same = await f.run(["--name", "Other Name"]);
-  expect(same.out).not.toContain("docker rm -f");
+  expect(same.out).not.toContain("k-spec-my-app");
+  expect(same.out).not.toMatch(/until now/);
   expect(f.project().slug).toBe("other-name");
+});
+
+test("a new name that gives the same container name moves nothing, so nothing is said about moving", async () => {
+  const f = folder();
+  await f.run();
+  const renamed = await f.run(["--name", "my app"]);
+  expect(renamed.code).toBe(0);
+  expect(f.project()).toMatchObject({ name: "my app", slug: "my-app" });
+  expect(renamed.out).not.toMatch(/until now|docker rm|watch/);
+});
+
+// The first line of the compose file can come from a repository someone else wrote, and its id
+// and slug go into a shell script: anything init would not have generated itself is refused.
+test.each([
+  ["an id that would close the launcher's quote", '{"id":"x\'; touch INJECTED; : \'","name":"Team App","slug":"team-app"}'],
+  ["a slug that would close the launcher's quote", '{"id":"0123456789abcdef","name":"Team App","slug":"a\'; touch INJECTED; : \'"}'],
+  ["an id that would add keys to the compose file", JSON.stringify({ id: 'a"\n    privileged: true\n    pid: "host', name: "Team App", slug: "team-app" })],
+])("a committed compose file with %s is refused and left as it is", async (_, header) => {
+  const f = folder();
+  const theirs = `# k-spec-project: ${header}\nservices:\n  k-spec:\n    image: k-spec:dev\n`;
+  f.put(".k-spec/compose.yaml", theirs);
+  const result = await f.run(["--port", "15511"]);
+  expect([result.code, result.out]).toEqual([1, ""]);
+  expect(result.err).toBe(`error: ${CWD}/.k-spec/compose.yaml was not written by k-spec init, or its first line was changed (restore it from git, or move it away)`);
+  expect(result.err.split("\n")).toHaveLength(1);
+  expect([...f.files.keys()]).toEqual([`${CWD}/.k-spec/compose.yaml`]);
+  expect(f.text(".k-spec/compose.yaml")).toBe(theirs);
+  expect(result.asked).toEqual([]);
+});
+
+test("a compose file that is not init's is never overwritten, and a project never silently becomes a new one", async () => {
+  const own = folder();
+  own.put(".k-spec/compose.yaml", "services:\n  web:\n    image: nginx\n");
+  expect((await own.run()).code).toBe(1);
+  expect(own.text(".k-spec/compose.yaml")).toBe("services:\n  web:\n    image: nginx\n");
+  expect(own.files.size).toBe(1);
+
+  // A set-up project whose compose file lost its first line keeps its settings untouched too.
+  const f = folder();
+  await f.run();
+  const before = f.text(".k-spec/.env");
+  f.put(".k-spec/compose.yaml", `\n${f.text(".k-spec/compose.yaml")}`);
+  const result = await f.run();
+  expect(result.code).toBe(1);
+  expect(f.text(".k-spec/.env")).toBe(before);
+});
+
+test("settings written the way people write them are read as Compose reads them", async () => {
+  const f = folder();
+  await f.run();
+  const { K_SPEC_BOARD_TOKEN: token, K_SPEC_BOARD_PROJECT: project } = f.env();
+  const edited = [
+    `export K_SPEC_BOARD_TOKEN=${token}`,
+    "K_SPEC_BOARD_PORT=14271   # the port I like",
+    'K_SPEC_BOARD_HOST="box.local"',
+    "K_SPEC_BOARD_UID=501",
+    "K_SPEC_BOARD_GID=1000",
+    `K_SPEC_BOARD_PROJECT=${project}`,
+    "",
+  ].join("\n");
+  f.put(".k-spec/.env", edited, 0o600);
+  const again = await f.run();
+  expect([again.code, again.err]).toEqual([0, ""]);
+  // Nothing was missing, so nothing is added: above all no second token.
+  expect(f.text(".k-spec/.env")).toBe(edited);
+  expect(again.out.split("\n")[0]).toBe('k-spec is set up for "My App" (board k-spec-my-app, port 14271, image k-spec:dev).');
+  // The port it already has is its own board's: not asked about, not refused.
+  const same = await f.run(["--port", "14271"]);
+  expect([same.code, same.asked]).toEqual([0, []]);
 });
 
 test("as root it refuses: the files would belong to root", async () => {
