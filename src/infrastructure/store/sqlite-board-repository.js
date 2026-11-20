@@ -62,6 +62,7 @@ function readBoard(db) {
         id: m.id,
         author: { kind: m.authorKind, name: m.authorName },
         body: m.body,
+        ...(m.request ? { request: true } : {}),
         createdAt: m.createdAt,
       })),
       links: linksOf(c.id).map(({ id, title, path }) => ({ id, title, path })),
@@ -161,6 +162,7 @@ function insertCard(tx, laneId, card, position) {
       authorName: m.author.name,
       body: m.body,
       createdAt: m.createdAt,
+      request: m.request === true,
     })),
   );
   insertAll(tx, t.cardLinks, positioned(card.links, ({ id, title, path }) => ({ id, cardId, title, path })));

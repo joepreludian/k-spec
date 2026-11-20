@@ -2,6 +2,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { COMMANDS } from "@/application/commands.js";
 import { fixedClock } from "@/infrastructure/clock.js";
 import { sequentialIdGenerator } from "@/infrastructure/id-generator.js";
@@ -180,4 +183,54 @@ test("reads see one moment of the database and writes take the write lock up fro
   repository.replaceSync(seedBoard());
   expect(transaction).toHaveBeenCalledTimes(3);
   expect(transaction.mock.calls[2][1]).toEqual({ behavior: "immediate" });
+});
+
+test("a request and its answer come back exactly as saved", async () => {
+  await repository.save(seedBoard());
+  const card = (await repository.load()).lanes.flatMap((l) => l.cards)[0];
+  await run("addComment", { cardId: card.id, body: "Plan this", request: true });
+  await run("addComment", { cardId: card.id, body: "a note" });
+  const { board: expected } = await run("addComment", {
+    cardId: card.id,
+    body: "done",
+    author: { kind: "agent", name: "Claude" },
+  });
+  const board = await repository.load();
+  expect(board).toStrictEqual(expected);
+  const comments = board.lanes.flatMap((l) => l.cards).find((c) => c.id === card.id).comments.slice(-3);
+  expect(comments.map((m) => Object.hasOwn(m, "request"))).toEqual([true, false, false]);
+});
+
+test("a database from before requests opens with ordinary comments", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kspec-old-"));
+  // The first migration alone: the database as it was before requests existed.
+  const journal = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8"));
+  const [first] = journal.entries;
+  fs.mkdirSync(path.join(dir, "old", "meta"), { recursive: true });
+  fs.copyFileSync(`drizzle/${first.tag}.sql`, path.join(dir, "old", `${first.tag}.sql`));
+  fs.writeFileSync(path.join(dir, "old", "meta", "_journal.json"), JSON.stringify({ ...journal, entries: [first] }));
+  const file = path.join(dir, "board.db");
+  const old = new Database(file);
+  migrate(drizzle(old), { migrationsFolder: path.join(dir, "old") });
+  old.exec(`
+    insert into board (id, name, next_card_number, project_name, version) values ('b', 'Old', 2, 'Old', 3);
+    insert into lanes (id, name, position) values ('lane', 'Lane', 0);
+    insert into cards (id, number, lane_id, position, title, description, agent_status, created_at, updated_at)
+      values ('c1', 1, 'lane', 0, 'Card', '', 'idle', '${T0}', '${T0}');
+    insert into comments (id, card_id, position, author_kind, author_name, body, created_at)
+      values ('m1', 'c1', 0, 'person', 'You', 'from before', '${T0}');
+  `);
+  old.close();
+
+  const now = openDatabase(file);
+  const reopened = createSqliteBoardRepository(now.db);
+  const before = await reopened.load();
+  expect(before.lanes[0].cards[0].comments).toStrictEqual([
+    { id: "m1", author: { kind: "person", name: "You" }, body: "from before", createdAt: T0 },
+  ]);
+  expect(reopened.version()).toBe(3);
+  await COMMANDS.addComment({ ...deps, repository: reopened }, { cardId: "c1", body: "Plan this", request: true });
+  expect((await reopened.load()).lanes[0].cards[0].comments.map((m) => m.request)).toEqual([undefined, true]);
+  now.close();
+  fs.rmSync(dir, { recursive: true, force: true });
 });

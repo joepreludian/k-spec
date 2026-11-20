@@ -2,6 +2,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { PERSON } from "@/domain/author.js";
+import { updateCard } from "@/domain/board.js";
+import { addComment } from "@/domain/card.js";
 import { seedBoard } from "@/infrastructure/seed-board.js";
 import { DumpError, dumpBoardSync, loadDumpSync, parseDump, serializeDump } from "./board-dump.js";
 import { openDatabase } from "./open-database.js";
@@ -96,4 +99,21 @@ test("a missing dump file is a DumpError", () => {
 
 test("parseDump returns the board", () => {
   expect(parseDump('{"format":1,"board":{"name":"x"}}', "f")).toEqual({ name: "x" });
+});
+
+test("a request survives a dump and a load; ordinary comments are written as before", () => {
+  const seed = seedBoard();
+  const cardId = seed.lanes.flatMap((l) => l.cards)[0].id;
+  const withRequest = updateCard(seed, cardId, (card) =>
+    addComment(card, { id: "req-1", author: PERSON, body: "Plan this", request: true }, "2026-11-14T12:00:00.000Z"),
+  );
+  const source = newRepository();
+  source.replaceSync(withRequest);
+  dumpBoardSync({ repository: source, file });
+  const text = fs.readFileSync(file, "utf8");
+  expect(text.match(/"request": true/g)).toHaveLength(1);
+  expect(text).not.toContain('"request": false');
+  const target = newRepository();
+  loadDumpSync({ repository: target, file });
+  expect(target.readSync()).toStrictEqual(withRequest);
 });

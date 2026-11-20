@@ -1,0 +1,1 @@
+ALTER TABLE `comments` ADD `request` integer DEFAULT false NOT NULL;

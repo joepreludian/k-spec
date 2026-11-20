@@ -92,6 +92,8 @@ export const comments = sqliteTable("comments", {
   authorName: text("author_name").notNull(),
   body: text("body").notNull(),
   createdAt: text("created_at").notNull(),
+  // A request to the agent. The board only carries the mark on requests; here it is a plain flag.
+  request: integer("request", { mode: "boolean" }).notNull().default(false),
 });
 
 export const cardLinks = sqliteTable("card_links", {
