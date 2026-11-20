@@ -25,13 +25,15 @@ The first command sets the project up, the second starts its board, the third sh
 
 Open the link once. It sets a cookie and you land on an empty board named after the folder, with the lanes Backlog, Todo, In Progress, Review and Done. The board keeps running in the background and comes back by itself after a reboot.
 
+`latest` is the newest release. `init` pins the project to the exact version it ran from and names it in its first line (`… image docker.io/joepreludian/k-spec:0.1.0`); from then on the project uses that version until you update it.
+
 `init` wrote these files:
 
 | File | What it is | Commit it? |
 |---|---|---|
 | `.k-spec/compose.yaml` | The board's container, pinned to the image version that set the project up | yes |
 | `.k-spec/k-spec` | The launcher: the `k-spec` command for this project's board | yes |
-| `.k-spec/.gitignore` | Keeps the three entries below marked "no" out of git | yes |
+| `.k-spec/.gitignore` | Keeps the three entries below marked "no" out of git, and the dump in it even if the project ignores folders called `data` | yes |
 | `.claude/skills/k-spec/SKILL.md` | The skill that tells Claude Code how to use the board | yes |
 | `.k-spec/data/k-spec.dump.json` | The board, as the application writes it (see "The board in git") | yes |
 | `.k-spec/.env` | This machine's token, port, host name and owner | no |
@@ -55,7 +57,7 @@ Every call runs once in a short-lived container next to the board (about a third
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--name <name>` | The project's name: the board's name, and (lower-cased, as `k-spec-<name>`) the name of its container | the folder's name |
+| `--name <name>` | The project's name: the board's title when the board is first created, and (lower-cased, as `k-spec-<name>`) the name of its container. Passed later, it renames the container only; the board keeps its title | the folder's name |
 | `--port <n>` | The port the board is published on | a free one between 14201 and 14299, picked at random |
 | `--host <name>` | The host name in the printed access link, for a VM or LAN name | `localhost` |
 
@@ -64,10 +66,20 @@ Every call runs once in a short-lived container next to the board (about a third
 - `--network host` in the first command is what lets `init` see which ports are in use. Without it the port is still picked at random from the range, but not checked.
 - A stopped board does not hold its port, so a project set up later can be given the same one. Then the board that starts second fails with Docker's "port is already allocated". Run `init --port <n>` there (the full `docker run … k-spec init --port <n>`), and `up -d` again.
 - Two projects whose folders have the same name cannot both run: the second fails to start with "container name is already in use" and the first is not touched. Give one of them a name: `init --name "Another name"`.
+- To rename a project whose board is running: stop any `watch` first (it holds the old network, and the move stops half way with the board down), run `init --name "New name"`, then `up -d`.
 - A second clone or a git worktree of a project on the same machine uses the first one's board: the launcher is committed and finds the board by its name.
 - On Docker Desktop, "the host's network" is that of Docker's own virtual machine. What the port check sees there has not been tried.
 
-**Updating.** Run the first command again with the newer image, then `docker compose -f .k-spec/compose.yaml up -d`. The project keeps its token, port, name and board; the compose file, the launcher and the skill are brought to the new version. There is no way back to an older version.
+**Updating.** Get the newer image, run `init` from it, start the board again:
+
+```bash
+docker pull docker.io/joepreludian/k-spec:latest      # without this, Docker reuses the image it has and nothing changes
+docker run --rm --network host -u "$(id -u):$(id -g)" -v "$PWD:$PWD" -w "$PWD" \
+  docker.io/joepreludian/k-spec:latest k-spec init
+docker compose -f .k-spec/compose.yaml up -d
+```
+
+The project keeps its token, port, name and board; the compose file, the launcher and the skill are brought to the new version, and `init`'s first line says which. Commit the changed files. There is no way back to an older version.
 
 **The board in git.** The database is not committed; a JSON dump of the board is. The server writes it when the board stops (`docker compose … stop`, `down`, a restart, a shutdown of the machine), not after every change, so write it yourself before committing the board:
 
@@ -76,7 +88,15 @@ docker compose -f .k-spec/compose.yaml exec k-spec npm run db:dump   # the board
 docker compose -f .k-spec/compose.yaml exec k-spec npm run db:load   # the dump -> the board, after pulling a newer one
 ```
 
-On another machine, clone the project and run the same three commands: `init` keeps the project's name from the committed files and gives that machine its own token and port, and a board with an empty database starts from the committed dump. Do not edit the dump by hand.
+On another machine, clone the project and set that machine up from the version the project is pinned to, so that the committed files do not change:
+
+```bash
+docker run --rm --network host -u "$(id -u):$(id -g)" -v "$PWD:$PWD" -w "$PWD" \
+  "$(sed -n 's/^ *image: //p' .k-spec/compose.yaml)" k-spec init
+docker compose -f .k-spec/compose.yaml up -d --wait
+```
+
+`init` keeps the project's name and identity from the committed files and gives that machine its own token and port, and a board with an empty database starts from the committed dump. It refuses a `.k-spec/compose.yaml` it did not write. Do not edit the dump by hand.
 
 **A board on another machine.** The launcher only talks to its own project's board. For any other board, give the address and token yourself:
 
