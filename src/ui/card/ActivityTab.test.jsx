@@ -4,6 +4,8 @@ import { ActivityTab } from "./ActivityTab.jsx";
 import { renderWithBoard } from "@/test/render-board.jsx";
 import { seedBoard } from "@/infrastructure/seed-board.js";
 import { findCard } from "@/domain/board.js";
+import { addComment } from "@/domain/card.js";
+import { PERSON } from "@/domain/author.js";
 
 const board = seedBoard();
 // card-2: person comment (comment-2) then agent reply (comment-3), plus status/work events
@@ -68,4 +70,56 @@ test("renders events as muted one-liners in time order with the comments", () =>
   expect(texts.some((t) => /^Work started on lima \/ feat\/watcher · /.test(t))).toBe(true);
   expect(texts.some((t) => /Watcher prototype running/.test(t))).toBe(true);
   expect(texts.indexOf(texts.find((t) => /^Work ended/.test(t)))).toBeGreaterThan(texts.indexOf(texts.find((t) => /on host/.test(t))));
+});
+
+test("Send to agent dispatches the comment as a request and clears", async () => {
+  const { executor } = renderWithBoard(<ActivityTab card={bare} />, board);
+  const composer = screen.getByLabelText("Write a comment");
+  await userEvent.type(composer, "Plan this");
+  await userEvent.click(screen.getByRole("button", { name: "Send to agent" }));
+  expect(executor.execute).toHaveBeenCalledTimes(1);
+  expect(executor.execute).toHaveBeenCalledWith("addComment", { cardId: "card-8", body: "Plan this", request: true });
+  expect(composer).toHaveValue("");
+});
+
+test("Send to agent is disabled while the composer is blank and while posting as agent", async () => {
+  renderWithBoard(<ActivityTab card={bare} />, board);
+  const send = screen.getByRole("button", { name: "Send to agent" });
+  expect(send).toBeDisabled();
+  await userEvent.type(screen.getByLabelText("Write a comment"), "Plan this");
+  expect(send).toBeEnabled();
+  await userEvent.click(screen.getByRole("checkbox", { name: "Post as agent" }));
+  expect(send).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Comment" })).toBeEnabled();
+});
+
+test("Ctrl+Enter still posts an ordinary comment", async () => {
+  const { executor } = renderWithBoard(<ActivityTab card={bare} />, board);
+  await userEvent.type(screen.getByLabelText("Write a comment"), "A note{Control>}{Enter}{/Control}");
+  expect(executor.execute).toHaveBeenCalledWith("addComment", { cardId: "card-8", body: "A note" });
+});
+
+test("a request shows that it is for the agent and whether it was answered", () => {
+  const T = "2026-11-14T10:00:00.000Z";
+  const asked = addComment(
+    addComment(bare, { id: "n1", author: PERSON, body: "A note" }, T),
+    { id: "r1", author: PERSON, body: "Plan this", request: true },
+    T,
+  );
+  const { unmount } = renderWithBoard(<ActivityTab card={asked} />, board);
+  let [note, request] = screen.getAllByRole("article");
+  expect(note).not.toHaveAttribute("data-request");
+  expect(within(note).queryByText("to agent")).not.toBeInTheDocument();
+  expect(request).toHaveAttribute("data-request", "open");
+  expect(within(request).getByText("to agent")).toBeInTheDocument();
+  expect(within(request).getByText("waiting for agent")).toBeInTheDocument();
+  unmount();
+
+  const answered = addComment(asked, { id: "a1", author: { kind: "agent", name: "claude" }, body: "Here" }, T);
+  renderWithBoard(<ActivityTab card={answered} />, board);
+  [note, request] = screen.getAllByRole("article");
+  expect(request).toHaveAttribute("data-request", "answered");
+  expect(within(request).getByText("to agent")).toBeInTheDocument();
+  expect(within(request).getByText("answered")).toBeInTheDocument();
+  expect(within(request).queryByText("waiting for agent")).not.toBeInTheDocument();
 });

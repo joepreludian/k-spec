@@ -137,3 +137,22 @@ describe("service indicator", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 });
+
+test("a card with open requests says how many wait for the agent", () => {
+  const bare = createCard({ id: "c1", number: 1, title: "Bare", now: T });
+  const one = addComment(bare, { id: "r1", author: PERSON, body: "Plan this", request: true }, T);
+  const { rerender } = render(<CardTile card={one} labels={labels} onOpen={vi.fn()} />);
+  expect(screen.getByLabelText("1 request waiting for agent")).toHaveTextContent("1");
+
+  const two = addComment(one, { id: "r2", author: PERSON, body: "And test it", request: true }, T);
+  rerender(<CardTile card={two} labels={labels} onOpen={vi.fn()} />);
+  expect(screen.getByLabelText("2 requests waiting for agent")).toHaveTextContent("2");
+
+  const answered = addComment(two, { id: "a1", author: { kind: "agent", name: "claude" }, body: "ok" }, T);
+  rerender(<CardTile card={answered} labels={labels} onOpen={vi.fn()} />);
+  expect(screen.queryByLabelText(/waiting for agent/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText("3 comments")).toBeInTheDocument();
+
+  rerender(<CardTile card={cardWithEverything()} labels={labels} onOpen={vi.fn()} />);
+  expect(screen.queryByLabelText(/waiting for agent/)).not.toBeInTheDocument();
+});

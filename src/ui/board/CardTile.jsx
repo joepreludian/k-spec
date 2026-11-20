@@ -1,7 +1,7 @@
 "use client";
 
-import { ListChecks, MessageSquare } from "lucide-react";
-import { cardProgress } from "@/domain/card.js";
+import { Bot, ListChecks, MessageSquare } from "lucide-react";
+import { cardProgress, openRequests } from "@/domain/card.js";
 import { AgentStatusBadge } from "@/ui/shared/AgentStatusBadge.jsx";
 import { LabelChip } from "@/ui/shared/LabelChip.jsx";
 import { ServiceIndicator } from "@/ui/shared/ServiceIndicator.jsx";
@@ -15,6 +15,7 @@ export function CardTile({ card, labels, onOpen, className, ref, ...rest }) {
   const commentCount = card.comments.length;
   const hasChecklists = card.checklists.length > 0;
   const services = card.work?.services ?? [];
+  const waiting = openRequests(card).length; // requests no agent has answered yet
   const showMeta = card.agentStatus !== "idle" || hasChecklists || commentCount > 0 || services.length > 0;
 
   return (
@@ -45,6 +46,15 @@ export function CardTile({ card, labels, onOpen, className, ref, ...rest }) {
           <AgentStatusBadge status={card.agentStatus} />
           <span className="ml-auto flex items-center gap-3">
             <ServiceIndicator services={services} />
+            {waiting > 0 && (
+              <span
+                className="flex items-center gap-1 font-medium text-amber-700 dark:text-amber-300"
+                aria-label={`${waiting} ${waiting === 1 ? "request" : "requests"} waiting for agent`}
+              >
+                <Bot aria-hidden="true" className="size-3.5" />
+                {waiting}
+              </span>
+            )}
             {hasChecklists && (
               <span
                 className="flex items-center gap-1 tabular-nums"

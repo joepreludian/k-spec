@@ -1,5 +1,6 @@
 "use client";
 
+import { openRequests } from "@/domain/card.js";
 import { activityItems } from "./activity-items.js";
 import { CommentForm } from "./CommentForm.jsx";
 import { CommentItem } from "./CommentItem.jsx";
@@ -8,6 +9,7 @@ import { EventItem } from "./EventItem.jsx";
 /** Comments and status/work events in one timeline, with the composer at the bottom. */
 export function ActivityTab({ card }) {
   const items = activityItems(card);
+  const open = new Set(openRequests(card).map((comment) => comment.id));
   return (
     <section className="flex flex-col gap-3">
       {items.length === 0 ? (
@@ -16,7 +18,11 @@ export function ActivityTab({ card }) {
         <ul aria-label="Activity" className="flex flex-col gap-2">
           {items.map((item, index) => (
             <li key={item.kind === "comment" ? item.comment.id : `event-${index}`}>
-              {item.kind === "comment" ? <CommentItem comment={item.comment} /> : <EventItem event={item.event} />}
+              {item.kind === "comment" ? (
+                <CommentItem comment={item.comment} open={open.has(item.comment.id)} />
+              ) : (
+                <EventItem event={item.event} />
+              )}
             </li>
           ))}
         </ul>
