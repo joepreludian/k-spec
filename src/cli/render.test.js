@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { boardOf } from "@/test/board-server.js";
-import { fixtureBoard } from "@/test/cli-fixture.js";
+import { commentOn, fixtureBoard } from "@/test/cli-fixture.js";
 import { formatTime, renderBoard, renderCard } from "./render.js";
 
 const board = fixtureBoard();
@@ -156,4 +156,38 @@ test("every other field of a card is cleaned too", () => {
   expect(lines).toContain("  You Comments (9), 2026-11-10 10:00: Start here.");
   expect(lines).toContain("  Claude (agent), 2026-11-10 10:00: Done.[31m");
   expect(lines.filter((line) => /^(Comments|Services|Work|Checklist \d+:) ?/.test(line))).toHaveLength(5);
+});
+
+const CLAUDE = { kind: "agent", name: "Claude" };
+const show = (b, number) => {
+  const lane = b.lanes.find((l) => l.cards.some((c) => c.number === number));
+  return renderCard(b, lane.cards.find((c) => c.number === number), lane);
+};
+
+test("a request says who it is for and whether it is open", () => {
+  const asked = commentOn(board, 7, { id: "r1", body: "Plan this\nplease", request: true, at: "2026-11-10T11:00:00.000Z" });
+  expect(show(asked, 7).split("\n").slice(-3)).toEqual([
+    "Comments (1)",
+    "  You to agent (open), 2026-11-10 11:00: Plan this",
+    "    please",
+  ]);
+  const answered = commentOn(asked, 7, { id: "a1", body: "Here is the plan", author: CLAUDE, at: "2026-11-10T11:05:00.000Z" });
+  expect(show(answered, 7).split("\n").slice(-4)).toEqual([
+    "Comments (2)",
+    "  You to agent (answered), 2026-11-10 11:00: Plan this",
+    "    please",
+    "  Claude (agent), 2026-11-10 11:05: Here is the plan",
+  ]);
+  expect(show(board, 4)).not.toContain("to agent");
+});
+
+test("the board counts a card's open requests", () => {
+  const one = commentOn(board, 7, { id: "r1", body: "Plan this", request: true });
+  expect(renderBoard({ board: one, version: 1 })).toContain("  #7 blocked  Seven  1 comment  1 request\n");
+  const two = commentOn(one, 7, { id: "r2", body: "And test it", request: true });
+  expect(renderBoard({ board: two, version: 1 })).toContain("  #7 blocked  Seven  2 comments  2 requests\n");
+  const answered = commentOn(two, 7, { id: "a1", body: "ok", author: CLAUDE });
+  expect(renderBoard({ board: answered, version: 1 })).toContain("  #7 blocked  Seven  3 comments\n");
+  const onWorked = commentOn(board, 4, { id: "r1", body: "Plan this", request: true });
+  expect(renderBoard({ board: onWorked, version: 1 })).toContain("3 comments  1 request  work feat/cli");
 });

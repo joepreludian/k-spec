@@ -73,16 +73,18 @@ const tick = (wanted) => ({
 /** Commands that change the board. Each resolves what was typed against the board, then posts one command. */
 export const WRITE_COMMANDS = {
   comment: {
-    usage: "comment <n> <text> [--agent <name>]",
-    summary: "add a comment (- reads stdin); yours unless --agent or K_SPEC_AGENT names an agent",
-    options: { agent: { type: "string" } },
+    usage: "comment <n> <text> [--agent <name>] [--request]",
+    summary: "add a comment (- reads stdin); yours unless --agent or K_SPEC_AGENT names an agent; --request sends it to the agent",
+    options: { agent: { type: "string" }, request: { type: "boolean" } },
     arity: [2, 2],
     async run(ctx, { positionals: [n, word], values }) {
       const author = agentAuthor(values, ctx.env);
+      const request = values.request === true;
+      if (request && author) throw new UsageError("an agent cannot send a request");
       const body = await textOf(word, ctx.readStdin);
       const { card, number } = await findCard(ctx.api, n);
-      const answer = await ctx.api.execute("addComment", { cardId: card.id, body, ...(author ? { author } : {}) });
-      report(ctx, `#${number} comment added`, answer);
+      const input = { cardId: card.id, body, ...(author ? { author } : {}), ...(request ? { request: true } : {}) };
+      report(ctx, request ? `#${number} request sent` : `#${number} comment added`, await ctx.api.execute("addComment", input));
     },
   },
   status: {
@@ -166,6 +168,17 @@ export const WRITE_COMMANDS = {
     async run(ctx, { positionals: [n] }) {
       const { card, number } = await findCard(ctx.api, n);
       report(ctx, `#${number} work ended`, await ctx.api.execute("endWork", { cardId: card.id }));
+    },
+  },
+  link: {
+    usage: "link <n> <path> [<title>]",
+    summary: "attach a markdown file of the project to the card; the title defaults to the file's name",
+    options: {},
+    arity: [2, 3],
+    async run(ctx, { positionals: [n, path, title] }) {
+      const { card, number } = await findCard(ctx.api, n);
+      const input = { cardId: card.id, title: title ?? path.split("/").filter(Boolean).at(-1) ?? path, path };
+      report(ctx, `#${number} linked ${path}`, await ctx.api.execute("addCardLink", input));
     },
   },
   publish: {

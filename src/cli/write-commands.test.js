@@ -14,7 +14,7 @@ test("usage names every command", () => {
     expect(USAGE).toContain(`  ${command.usage}`);
   }
   expect(Object.keys(COMMAND_HANDLERS)).toEqual([
-    "board", "show", "comment", "status", "move", "check", "uncheck", "add", "delete", "start", "end", "publish", "unpublish", "run",
+    "board", "show", "comment", "status", "move", "check", "uncheck", "add", "delete", "start", "end", "link", "publish", "unpublish", "run",
   ]);
 });
 
@@ -33,6 +33,53 @@ test("a comment is the person's unless the caller says it is an agent", async ()
   expect(posts(both.server)[0][1].author.name).toBe("Claude");
   const blank = await run(["comment", "7", "Done"], { env: { K_SPEC_AGENT: " " } });
   expect(posts(blank.server)[0][1].author).toBeUndefined();
+});
+
+test("comment --request sends the comment to the agent", async () => {
+  const sent = await run(["comment", "7", "Plan this", "--request"]);
+  expect([sent.code, sent.out, sent.err]).toEqual([0, "#7 request sent", ""]);
+  expect(posts(sent.server)).toEqual([["addComment", { cardId: "card-7", body: "Plan this", request: true }]]);
+  expect(cardByNumber(await after(sent.server), 7).card.comments.at(-1).request).toBe(true);
+  const plain = await run(["comment", "7", "A note"]);
+  expect(Object.hasOwn(posts(plain.server)[0][1], "request")).toBe(false);
+});
+
+test("an agent cannot send a request", async () => {
+  const cases = [
+    [["comment", "7", "x", "--request", "--agent", "Claude"], {}],
+    [["comment", "7", "x", "--request"], { K_SPEC_AGENT: "Claude" }],
+  ];
+  for (const [args, env] of cases) {
+    const result = await run(args, { env });
+    expect([result.code, result.out, result.err]).toEqual([2, "", "error: an agent cannot send a request"]);
+    expect(posts(result.server)).toEqual([]);
+  }
+});
+
+test("link attaches a markdown file, titled by its file name unless told otherwise", async () => {
+  const plain = await run(["link", "7", "docs/specs/x.md"]);
+  expect([plain.code, plain.out, plain.err]).toEqual([0, "#7 linked docs/specs/x.md", ""]);
+  expect(posts(plain.server)).toEqual([["addCardLink", { cardId: "card-7", title: "x.md", path: "docs/specs/x.md" }]]);
+  expect(cardByNumber(await after(plain.server), 7).card.links.map((l) => [l.title, l.path])).toEqual([
+    ["x.md", "docs/specs/x.md"],
+  ]);
+  const titled = await run(["link", "#7", "docs/specs/x.md", "The spec"]);
+  expect(posts(titled.server)[0][1].title).toBe("The spec");
+  const bare = await run(["link", "7", "README.md"]);
+  expect(posts(bare.server)[0][1].title).toBe("README.md");
+  const json = await run(["link", "7", "docs/specs/x.md", "--json"]);
+  expect(Object.keys(JSON.parse(json.out)).sort()).toEqual(["id", "version"]);
+});
+
+test("link is refused by the board's own rules", async () => {
+  const twice = await run(["link", "4", "docs/a.md"]); // the fixture already links it
+  expect([twice.code, twice.out]).toEqual([1, ""]);
+  const outside = await run(["link", "4", "../secret.md"]);
+  expect([outside.code, outside.out]).toEqual([1, ""]);
+  const notMarkdown = await run(["link", "4", "src/cli/main.js"]);
+  expect(notMarkdown.code).toBe(1);
+  const missing = await run(["link", "4"]);
+  expect([missing.code, missing.err]).toEqual([2, "error: usage: k-spec link <n> <path> [<title>]"]);
 });
 
 test("--agent needs a name", async () => {

@@ -1,4 +1,8 @@
+import { cardByNumber } from "@/application/board-lookup.js";
 import { COMMANDS } from "@/application/commands.js";
+import { PERSON } from "@/domain/author.js";
+import { updateCard } from "@/domain/board.js";
+import { addComment } from "@/domain/card.js";
 import { fixedClock } from "@/infrastructure/clock.js";
 import { sequentialIdGenerator } from "@/infrastructure/id-generator.js";
 import { createInMemoryBoardRepository } from "@/infrastructure/in-memory-board-repository.js";
@@ -48,3 +52,12 @@ const FIXTURE = await build();
  * work on feat/cli with services Preview and Docs], Done []. Every timestamp is 2026-11-10 10:00 UTC.
  */
 export const fixtureBoard = () => structuredClone(FIXTURE);
+
+/**
+ * `board` with one more comment on card `#number`: `{ id, body, request, author, at }`.
+ * `request: true` makes it a request to the agent; `author` defaults to the person.
+ */
+export function commentOn(board, number, { id, body, request = false, author = PERSON, at = NOW }) {
+  const { card } = cardByNumber(board, number);
+  return updateCard(board, card.id, (c) => addComment(c, { id, author, body, request }, at));
+}

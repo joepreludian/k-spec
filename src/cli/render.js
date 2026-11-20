@@ -1,6 +1,6 @@
 import { laneByName, normalizeStatus } from "@/application/board-lookup.js";
 import { assertAgentStatus } from "@/domain/agent-status.js";
-import { cardProgress, checklistProgress } from "@/domain/card.js";
+import { cardProgress, checklistProgress, isRequest, openRequests } from "@/domain/card.js";
 
 // What a card says is printed next to what the CLI says, and the reader may be an agent. Text
 // from the board must not be able to start a line of its own or drive the terminal: fields that
@@ -30,12 +30,14 @@ const labelNames = (board, card) =>
 function cardLine(board, card, statusWidth) {
   const progress = cardProgress(card);
   const labels = labelNames(board, card);
+  const waiting = openRequests(card).length;
   const segments = [
     `#${card.number} ${card.agentStatus.padEnd(statusWidth)}`,
     oneLine(card.title),
     labels.length > 0 && `[${labels.join(", ")}]`,
     progress.total > 0 && `${progress.done}/${progress.total} done`,
     card.comments.length > 0 && count(card.comments.length, "comment"),
+    waiting > 0 && count(waiting, "request"),
     card.work && `work ${oneLine(card.work.branch)}`,
   ];
   return `  ${segments.filter(Boolean).join("  ")}`;
@@ -62,9 +64,14 @@ export function renderBoard({ board, version }, { lane, status } = {}) {
   return lines.join("\n");
 }
 
-function commentLines(comment) {
+/** A comment under "Comments". A request names the agent and says whether it still waits for an answer. */
+function commentLines(comment, open) {
   const name = oneLine(comment.author.name);
-  const who = comment.author.kind === "agent" ? `${name} (agent)` : name;
+  const who = isRequest(comment)
+    ? `${name} to agent (${open ? "open" : "answered"})`
+    : comment.author.kind === "agent"
+      ? `${name} (agent)`
+      : name;
   const [first, ...rest] = textLines(comment.body);
   return [`  ${who}, ${formatTime(comment.createdAt)}: ${first}`, ...rest.map((line) => `    ${line}`)];
 }
@@ -103,7 +110,10 @@ export function renderCard(board, card, lane, { activity = false } = {}) {
     );
     if (services.length > 0) body.push("Services", ...services.map((s) => `  ${oneLine(s.title)}  ${oneLine(s.url)}`));
   }
-  if (card.comments.length > 0) body.push(`Comments (${card.comments.length})`, ...card.comments.flatMap(commentLines));
+  if (card.comments.length > 0) {
+    const open = new Set(openRequests(card));
+    body.push(`Comments (${card.comments.length})`, ...card.comments.flatMap((comment) => commentLines(comment, open.has(comment))));
+  }
   if (activity && card.events.length > 0) {
     body.push("Activity", ...card.events.map((event) => `  ${formatTime(event.at)} ${oneLine(event.type)}`));
   }
