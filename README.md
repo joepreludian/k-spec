@@ -104,13 +104,13 @@ request #12 Refine the CLI [Backlog, idle] You, 2026-11-19 14:02: Let's plan thi
 
 The line carries the first 200 characters; the agent reads the rest with `k-spec show 12 --activity`. A request is printed once per run, and again by the next run while it is still open, so nothing is lost when nobody was watching. If the server goes away the watch says so once (`k-spec: server not answering at …`), keeps trying, re-reads the server's note (a restarted server has a new token) and says `k-spec: connected to …` when it is back. If the trouble changes it says that too: `k-spec: token rejected by …` means the server is up but the token the watch has is no longer right, which happens when `K_SPEC_TOKEN` comes from the environment and the server was restarted without a fixed token. It stops on Ctrl-C. `--json` prints one JSON object per line instead.
 
-**In Claude Code.** This repository ships a skill, `.claude/skills/k-spec/SKILL.md`. With it, a session:
+**In Claude Code.** This repository ships a skill, `skills/k-spec/SKILL.md` (linked into `.claude/skills`, so sessions opened in this repository load it). With it, a session:
 
 - reads the card when you name one in the chat ("let's refine k-spec #12"), with its history and linked files, so you do not have to paste context;
 - watches the board when you ask it to ("watch the board"): it runs `k-spec watch` under Claude Code's Monitor tool, which delivers each printed line to the chat and wakes the session. A monitor lives 30 minutes at most, so the agent starts it again each time;
 - handles a request: sets the card to `working`, does the work in the session, attaches files it wrote with `k-spec link`, replies once on the card, and sets `waiting` (you have to act) or `idle`.
 
-To make a project's sessions watch from the start, say so in that project's `CLAUDE.md`. To use the skill in another project, link or copy the folder into `~/.claude/skills/k-spec`, put `k-spec` on the path (`npm link`), and tell the CLI where the server is: `K_SPEC_URL` and `K_SPEC_TOKEN`, or `K_SPEC_SERVER_FILE=/path/to/k-spec/data/k-spec.server.json`.
+To make a project's sessions watch from the start, say so in that project's `CLAUDE.md`. To use the skill in another project, link or copy `skills/k-spec` into `~/.claude/skills/k-spec`, put `k-spec` on the path (`npm link`), and tell the CLI where the server is: `K_SPEC_URL` and `K_SPEC_TOKEN`, or `K_SPEC_SERVER_FILE=/path/to/k-spec/data/k-spec.server.json`.
 
 **What the access link is worth.** Whoever can write on the board can now give instructions to an agent that is watching it. Share the token link as you would share access to that agent.
 

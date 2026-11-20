@@ -2,7 +2,10 @@
 import fs from "node:fs";
 import { COMMAND_HANDLERS } from "./main.js";
 
-const FILE = ".claude/skills/k-spec/SKILL.md";
+// The skill is a product file: it is written in skills/k-spec and shipped from there.
+const FILE = "skills/k-spec/SKILL.md";
+// Sessions in this repository load it through a link, so there is one copy to keep right.
+const LOADED_HERE = ".claude/skills/k-spec";
 
 test("the skill exists, is named, and only uses commands the CLI has", () => {
   const text = fs.readFileSync(FILE, "utf8");
@@ -41,4 +44,11 @@ test("the skill covers what a session meets when watching goes wrong", () => {
   for (const phrase of ["token rejected", "ended by itself", "more than one line", "npx k-spec", "project folder"]) {
     expect(text).toContain(phrase);
   }
+});
+
+test("this repository's own sessions load the shipped skill, not a second copy", () => {
+  expect(fs.lstatSync(LOADED_HERE).isSymbolicLink()).toBe(true);
+  // A relative link: it must still point at the skill after the repository is cloned elsewhere.
+  expect(fs.readlinkSync(LOADED_HERE)).toBe("../../skills/k-spec");
+  expect(fs.realpathSync(`${LOADED_HERE}/SKILL.md`)).toBe(fs.realpathSync(FILE));
 });

@@ -36,7 +36,8 @@ src/
     files/[...path]/       /files/<path>: full-page view of one markdown file
   proxy.js         Next 16 request proxy (middleware) for the token gate.
 bin/               k-spec.mjs: the executable; gives src/cli/main.js the real world.
-.claude/skills/k-spec/   the skill that tells a Claude Code session how to use the board.
+skills/k-spec/     the skill that tells a Claude Code session how to use the board (the copy that
+                   ships). .claude/skills/k-spec is a link to it, so sessions in this repo load it.
 scripts/           db-dump.mjs, db-load.mjs and the `@/` alias hook for plain node.
 drizzle/           generated SQL migrations, committed (never edit by hand).
 data/              k-spec.dump.json (committed); the SQLite file and the running
@@ -108,7 +109,7 @@ A request is a comment a person addressed to the agent: `addComment` with `reque
 
 `k-spec watch` (`src/cli/watch.js`) is the one command that waits. It is `lazy`: `runCli` gives it `ctx.connect()` instead of a ready `ctx.api`, plus `ctx.sleep` and `ctx.signal`, so it can outlive a server restart and be driven step by step in tests (`steps` in `src/cli/test-cli.js`). Every 2 s it reads `GET /api/board/version` and reads the board only when that changed or after an outage. It prints a request once per run, on one line: every field goes through `flat` (control characters and all white space collapsed), because the reader is Claude Code's Monitor, which treats each stdout line as an event. Connection reports (`k-spec: …`) also go to stdout for that reason, once per kind of trouble (away, token rejected, unexpected answer), so a server that comes back refusing the token is not mistaken for one still away. The server has no push channel and no event log; open requests are always derivable from the board, which is what makes restarts and gaps safe.
 
-The skill in `.claude/skills/k-spec/SKILL.md` is the agent's side of the contract (read the card, set `working`, reply once, set `waiting` or `idle`; never acknowledge with a comment, since the first agent comment answers the request). `src/cli/skill.test.js` fails if it names a command or option the CLI does not have.
+The skill in `skills/k-spec/SKILL.md` is the agent's side of the contract (read the card, set `working`, reply once, set `waiting` or `idle`; never acknowledge with a comment, since the first agent comment answers the request). `src/cli/skill.test.js` fails if it names a command or option the CLI does not have. Edit the skill there only: `.claude/skills/k-spec` is a relative link to that folder (the same test checks it), never a second copy.
 
 ## Git
 
