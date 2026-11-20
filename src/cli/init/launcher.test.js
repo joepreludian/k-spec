@@ -58,7 +58,10 @@ function launch(args, env = {}, { cwd = work, PATH = `${bin}:${process.env.PATH}
 }
 
 const MINE = { FAKE_LABEL: "abc123", FAKE_BRANCH: "feat/x" };
-const { uid, gid } = os.userInfo();
+// Asked of the process, not of the user database: the launcher uses `id`, which answers for a
+// user that has no entry there (the usual case inside a container).
+const uid = process.getuid();
+const gid = process.getgid();
 const runCall = (...words) => [
   "run", "--rm", "--init", "-i",
   "--network", "k-spec-my-app",
