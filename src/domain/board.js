@@ -1,6 +1,7 @@
 import {
   addLabelToCard as cardAddLabel,
   createCard,
+  openRequests,
   removeLabelFromCard as cardRemoveLabel,
 } from "./card.js";
 import {
@@ -191,4 +192,14 @@ export function attachLabel(board, cardId, labelId, now) {
 
 export function detachLabel(board, cardId, labelId, now) {
   return updateCard(board, cardId, (card) => cardRemoveLabel(card, labelId, now));
+}
+
+/**
+ * Every open request on the board as `{ card, lane, comment }`, oldest first; requests made at
+ * the same moment keep board order (lanes, then cards, then comments).
+ */
+export function boardOpenRequests(board) {
+  return board.lanes
+    .flatMap((lane) => lane.cards.flatMap((card) => openRequests(card).map((comment) => ({ card, lane, comment }))))
+    .sort((a, b) => (a.comment.createdAt < b.comment.createdAt ? -1 : a.comment.createdAt > b.comment.createdAt ? 1 : 0));
 }

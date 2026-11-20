@@ -18,9 +18,11 @@ import {
   attachLabel,
   detachLabel,
   setProject,
+  boardOpenRequests,
 } from "./board.js";
 import { createLane } from "./lane.js";
-import { createCard } from "./card.js";
+import { addComment, createCard } from "./card.js";
+import { PERSON } from "./author.js";
 import {
   CardNotFound,
   DuplicateLabelName,
@@ -217,4 +219,26 @@ test("setProject replaces the block after validating", () => {
   expect(() => setProject(b, { ...project, readmePath: "../README.md" })).toThrow(InvalidLinkPath);
   expect(setProject(b, { ...project, readmePath: null }).project.readmePath).toBeNull();
   expect(setProject(b, { ...project, links: undefined, readmePath: undefined }).project).toEqual({ name: "opensource/k-spec", links: [], readmePath: null });
+});
+
+test("the board's open requests, oldest first, each with its card and lane", () => {
+  const agent = { kind: "agent", name: "Claude" };
+  const card = (id, number, comments) =>
+    comments.reduce(
+      (c, [commentId, author, at, request]) => addComment(c, { id: commentId, author, body: commentId, request }, at),
+      createCard({ id, number, title: id, now: T0 }),
+    );
+  const at = (minute) => `2026-11-14T10:${minute}:00.000Z`;
+  let b = addLane(addLane(createBoard({ id: "b", name: "Board" }), { id: "a", name: "A" }), { id: "z", name: "Z" });
+  b = addCardToLane(b, "a", card("c1", 1, [["r-c1", PERSON, at("20"), true], ["note", PERSON, at("21"), false]]));
+  b = addCardToLane(b, "z", card("c2", 2, [["r-c2", PERSON, at("10"), true]]));
+  b = addCardToLane(b, "z", card("c3", 3, [["r-c3", PERSON, at("05"), true], ["reply", agent, at("06"), false]]));
+  b = addCardToLane(b, "z", card("c4", 4, [["r-c4", PERSON, at("20"), true]]));
+  const found = boardOpenRequests(b);
+  expect(found.map(({ card: c, lane, comment }) => [c.id, lane.id, comment.id])).toEqual([
+    ["c2", "z", "r-c2"],
+    ["c1", "a", "r-c1"], // same minute as c4: board order decides
+    ["c4", "z", "r-c4"],
+  ]);
+  expect(boardOpenRequests(createBoard({ id: "e", name: "Empty" }))).toEqual([]);
 });

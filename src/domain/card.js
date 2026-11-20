@@ -8,6 +8,7 @@ import {
   EmptyText,
   EmptyTitle,
   InvalidCardNumber,
+  InvalidRequest,
   LinkNotFound,
   NoActiveWork,
   ServiceNotFound,
@@ -195,14 +196,34 @@ export function removeChecklistItem(card, checklistId, itemId, now) {
   );
 }
 
-export function addComment(card, { id, author, body }, now) {
+/**
+ * Adds a comment. With `request: true` it is a request: a person's comment addressed to the
+ * agent. Only a request carries the `request` key; an ordinary comment has none.
+ */
+export function addComment(card, { id, author, body, request = false }, now) {
+  if (typeof request !== "boolean") throw new InvalidRequest("A comment's request mark must be true or false");
+  const by = createAuthor(author);
+  if (request && by.kind === "agent") throw new InvalidRequest("An agent cannot send a request");
   const comment = {
     id,
-    author: createAuthor(author),
+    author: by,
     body: requireNonEmpty(body, EmptyText),
+    ...(request ? { request: true } : {}),
     createdAt: now,
   };
   return touch(card, { comments: [...card.comments, comment] }, now);
+}
+
+/** Whether the comment is a request to the agent. */
+export const isRequest = (comment) => comment.request === true;
+
+/**
+ * The card's open requests, in comment order. A request is open until an agent comments after
+ * it on the card; one agent comment answers every request above it.
+ */
+export function openRequests(card) {
+  const lastAnswer = card.comments.findLastIndex((comment) => comment.author.kind === "agent");
+  return card.comments.filter((comment, index) => index > lastAnswer && isRequest(comment));
 }
 
 export function addLink(card, { id, title, path }, now) {

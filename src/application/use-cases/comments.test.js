@@ -2,7 +2,7 @@ import { addComment } from "./add-comment.js";
 import { makeDeps, T0 } from "@/test/support.js";
 import { createBoard, addLane, addCardToLane, findCard } from "@/domain/board.js";
 import { createCard } from "@/domain/card.js";
-import { EmptyText, InvalidAuthor } from "@/domain/errors.js";
+import { EmptyText, InvalidAuthor, InvalidRequest } from "@/domain/errors.js";
 
 const initial = addCardToLane(
   addLane(createBoard({ id: "b", name: "Board" }), { id: "a", name: "A" }),
@@ -35,4 +35,13 @@ test("addComment validates body and author", async () => {
   await expect(
     addComment(deps, { cardId: "c1", body: "x", author: { kind: "bot", name: "x" } }),
   ).rejects.toThrow(InvalidAuthor);
+});
+
+test("addComment can send the comment as a request", async () => {
+  const deps = makeDeps(initial);
+  const { board } = await addComment(deps, { cardId: "c1", body: "Plan this", request: true });
+  expect(findCard(board, "c1").card.comments[0].request).toBe(true);
+  await expect(
+    addComment(deps, { cardId: "c1", body: "x", request: true, author: { kind: "agent", name: "c" } }),
+  ).rejects.toThrow(InvalidRequest);
 });

@@ -11,6 +11,8 @@ import {
   toggleChecklistItem,
   removeChecklistItem,
   addComment,
+  isRequest,
+  openRequests,
   checklistProgress,
   cardProgress,
   checklistSummaries,
@@ -26,6 +28,7 @@ import {
   EmptyText,
   InvalidAgentStatus,
   InvalidAuthor,
+  InvalidRequest,
   ChecklistNotFound,
   ChecklistItemNotFound,
   InvalidCardNumber,
@@ -172,6 +175,45 @@ test("addComment validates body and author", () => {
   expect(() =>
     addComment(base(), { id: "m", author: { kind: "bot", name: "x" }, body: "hi" }, T1),
   ).toThrow(InvalidAuthor);
+});
+
+test("a request is a person's comment marked for the agent; an ordinary comment has no mark", () => {
+  const c = addComment(base(), { id: "m1", author: PERSON, body: "Plan this", request: true }, T1);
+  expect(c.comments[0]).toEqual({
+    id: "m1",
+    author: { kind: "person", name: "You" },
+    body: "Plan this",
+    request: true,
+    createdAt: T1,
+  });
+  const plain = addComment(base(), { id: "m2", author: PERSON, body: "note", request: false }, T1);
+  expect(Object.hasOwn(plain.comments[0], "request")).toBe(false);
+  expect([isRequest(c.comments[0]), isRequest(plain.comments[0])]).toEqual([true, false]);
+});
+
+test("an agent cannot send a request, and the mark must be true or false", () => {
+  const agent = { kind: "agent", name: "Claude" };
+  expect(() => addComment(base(), { id: "m", author: agent, body: "x", request: true }, T1)).toThrow(InvalidRequest);
+  expect(() => addComment(base(), { id: "m", author: agent, body: "x", request: true }, T1)).toThrow(
+    "An agent cannot send a request",
+  );
+  for (const request of ["yes", 1, null]) {
+    expect(() => addComment(base(), { id: "m", author: PERSON, body: "x", request }, T1)).toThrow(InvalidRequest);
+  }
+  expect(addComment(base(), { id: "m", author: agent, body: "x", request: false }, T1).comments).toHaveLength(1);
+});
+
+test("a request is open until an agent comments after it on the card", () => {
+  const agent = { kind: "agent", name: "Claude" };
+  let c = addComment(base(), { id: "r1", author: PERSON, body: "one", request: true }, T1);
+  c = addComment(c, { id: "n1", author: PERSON, body: "a note" }, T1);
+  c = addComment(c, { id: "r2", author: PERSON, body: "two", request: true }, T1);
+  expect(openRequests(c).map((m) => m.id)).toEqual(["r1", "r2"]);
+  c = addComment(c, { id: "a1", author: agent, body: "done" }, T1);
+  expect(openRequests(c)).toEqual([]);
+  c = addComment(c, { id: "r3", author: PERSON, body: "three", request: true }, T1);
+  expect(openRequests(c).map((m) => m.id)).toEqual(["r3"]);
+  expect(openRequests(base())).toEqual([]);
 });
 
 test("addLink appends and bumps updatedAt", () => {
