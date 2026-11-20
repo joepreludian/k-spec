@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { decideAccess, EXEMPT_PREFIXES, isExemptPath } from "./decide-access.js";
+import { accessCookieNames, decideAccess, EXEMPT_PREFIXES, isExemptPath } from "./decide-access.js";
 
 const expected = "secret";
 
@@ -25,11 +25,11 @@ test("valid query token sets cookie", () => {
 });
 
 test("valid cookie passes", () => {
-  expect(decideAccess({ pathname: "/", cookieToken: "secret", expected })).toEqual({ action: "pass" });
+  expect(decideAccess({ pathname: "/", cookieTokens: ["secret"], expected })).toEqual({ action: "pass" });
 });
 
 test("wrong query with valid cookie still passes", () => {
-  expect(decideAccess({ pathname: "/", queryToken: "bad", cookieToken: "secret", expected })).toEqual({
+  expect(decideAccess({ pathname: "/", queryToken: "bad", cookieTokens: ["secret"], expected })).toEqual({
     action: "pass",
   });
 });
@@ -43,15 +43,39 @@ test("wrong query without cookie redirects to access with error", () => {
 
 test("nothing redirects to access without error", () => {
   expect(decideAccess({ pathname: "/", expected })).toEqual({ action: "redirect-access", error: false });
-  expect(decideAccess({ pathname: "/", cookieToken: "stale", expected })).toEqual({
+  expect(decideAccess({ pathname: "/", cookieTokens: ["stale"], expected })).toEqual({
     action: "redirect-access",
     error: false,
   });
 });
 
 test("no expected token configured never passes a non-exempt path", () => {
-  expect(decideAccess({ pathname: "/", queryToken: "", cookieToken: "", expected: "" })).toEqual({
+  expect(decideAccess({ pathname: "/", queryToken: "", cookieTokens: [""], expected: "" })).toEqual({
     action: "redirect-access",
     error: false,
   });
+});
+
+test.each([
+  ["localhost:3000", ["k-spec-token-3000", "k-spec-token"]],
+  ["lima-dev.local:14201", ["k-spec-token-14201", "k-spec-token"]],
+  ["[::1]:14201", ["k-spec-token-14201", "k-spec-token"]],
+  ["board.example", ["k-spec-token"]],
+  ["evil:123456", ["k-spec-token"]],
+  ["a:b", ["k-spec-token"]],
+  ["host:", ["k-spec-token"]],
+  ["", ["k-spec-token"]],
+  [undefined, ["k-spec-token"]],
+])("cookie names for host %s", (host, names) => {
+  expect(accessCookieNames(host)).toEqual(names);
+});
+
+test("any valid candidate cookie passes, none valid does not", () => {
+  expect(decideAccess({ pathname: "/", cookieTokens: ["stale", "secret"], expected })).toEqual({ action: "pass" });
+  expect(decideAccess({ pathname: "/", cookieTokens: [undefined, "secret"], expected })).toEqual({ action: "pass" });
+  expect(decideAccess({ pathname: "/", cookieTokens: ["stale", undefined], expected })).toEqual({
+    action: "redirect-access",
+    error: false,
+  });
+  expect(decideAccess({ pathname: "/", cookieTokens: [], expected })).toEqual({ action: "redirect-access", error: false });
 });

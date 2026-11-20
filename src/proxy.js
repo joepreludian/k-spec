@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
-import { decideAccess } from "@/infrastructure/access/decide-access.js";
+import { accessCookieNames, COOKIE_NAME, decideAccess } from "@/infrastructure/access/decide-access.js";
 
-export const COOKIE_NAME = "k-spec-token";
+export { COOKIE_NAME };
 const THIRTY_DAYS = 60 * 60 * 24 * 30;
 
-/** Token-link access gate. See docs: one shared token, cookie once presented. */
+/**
+ * Token-link access gate: one shared token, kept in a cookie once presented. The cookie is
+ * named for the port the browser used, so boards on other ports of the same host keep theirs.
+ */
 export function proxy(request) {
   const url = request.nextUrl;
+  const cookieNames = accessCookieNames(request.headers.get("host") ?? url.host);
   const decision = decideAccess({
     pathname: url.pathname,
     queryToken: url.searchParams.get("token") ?? undefined,
-    cookieToken: request.cookies.get(COOKIE_NAME)?.value,
+    cookieTokens: cookieNames.map((name) => request.cookies.get(name)?.value),
     expected: process.env.K_SPEC_TOKEN ?? "",
   });
 
@@ -22,7 +26,7 @@ export function proxy(request) {
       clean.searchParams.delete("token");
       const response = NextResponse.redirect(clean);
       response.cookies.set({
-        name: COOKIE_NAME,
+        name: cookieNames[0],
         value: decision.token,
         httpOnly: true,
         sameSite: "lax",
