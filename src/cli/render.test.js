@@ -191,3 +191,21 @@ test("the board counts a card's open requests", () => {
   const onWorked = commentOn(board, 4, { id: "r1", body: "Plan this", request: true });
   expect(renderBoard({ board: onWorked, version: 1 })).toContain("3 comments  1 request  work feat/cli");
 });
+
+test("line and paragraph separators cannot start a line either", () => {
+  const sep = String.fromCharCode(0x2028);
+  const para = String.fromCharCode(0x2029);
+  const sneaky = commentOn(boardOf({ Backlog: [`3:Ti${sep}tle`] }), 3, { id: "m", body: `one${sep}Comments (9)${para}three` });
+  const text = show(sneaky, 3);
+  expect(text.includes(sep) || text.includes(para)).toBe(false);
+  expect(text.split("\n")).toEqual([
+    "#3 Ti tle",
+    "lane Backlog | status idle | updated 2026-11-10 10:00",
+    "",
+    "Comments (1)",
+    "  You, 2026-11-10 10:00: one",
+    "    Comments (9)",
+    "    three",
+  ]);
+  expect(renderBoard({ board: sneaky, version: 1 })).toContain("  #3 idle  Ti tle  1 comment");
+});

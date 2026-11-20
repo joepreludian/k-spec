@@ -5,15 +5,20 @@ import { cardProgress, checklistProgress, isRequest, openRequests } from "@/doma
 // What a card says is printed next to what the CLI says, and the reader may be an agent. Text
 // from the board must not be able to start a line of its own or drive the terminal: fields that
 // belong on one line lose their line breaks and control characters, and longer text (a
-// description, a comment) is indented under its heading with control characters removed.
-const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
+// description, a comment) is indented under its heading with control characters removed. The
+// Unicode line and paragraph separators count as line breaks: some readers split lines on them.
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g;
 const CONTROL_BUT_LAYOUT = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g;
 
 /** `text` as it may appear inside one printed line. */
 export const oneLine = (text) => String(text).replace(CONTROL, " ");
 
 /** The lines of a longer text, safe to print under a heading. */
-const textLines = (text) => String(text).replace(/\r\n?/g, "\n").replace(CONTROL_BUT_LAYOUT, "").split("\n");
+const textLines = (text) =>
+  String(text)
+    .replace(/\r\n?|[\u2028\u2029]/g, "\n")
+    .replace(CONTROL_BUT_LAYOUT, "")
+    .split("\n");
 
 /** An ISO timestamp as `YYYY-MM-DD HH:MM`, UTC. */
 export function formatTime(iso) {

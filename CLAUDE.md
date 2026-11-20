@@ -2,7 +2,7 @@
 
 ## Purpose
 
-k-spec is a Trello-style kanban board where a person hands work to AI agents as cards and talks to them on the card: the description is the spec, checklists define "done", comments are the back-and-forth, and an agent status tag shows whether an agent is idle, working, waiting for input, or blocked. The application owns its state: the board is stored in a SQLite database, people change it through the web UI (behind a token-link access gate), agents (and people in a terminal) through the `k-spec` CLI, and an MCP server comes next; nobody edits state by hand. Every edit in the browser is a command posted to the server and saved. What goes into git is a JSON dump of the board that the application writes and reads (`data/k-spec.dump.json`), never the database file. Cards carry sequential `#n` numbers, the card dialog has Overview / Spec / Execution / Activity tabs (Spec renders linked markdown files from the project; Execution shows where a card is being worked and the Claude session behind it, seeded for now), and the top bar names the project with links and a README sheet. A card's active work can also carry published services (title + URL, set through the `publishService` / `unpublishService` commands, seeded for now): the board card shows a globe that turns green when the browser's live check (`src/ui/shared/use-service-status.js`, a `no-cors` fetch) gets an answer, and the Overview tab lists them as new-tab buttons.
+k-spec is a Trello-style kanban board where a person hands work to AI agents as cards and talks to them on the card: the description is the spec, checklists define "done", comments are the back-and-forth (a comment sent with "Send to agent" is a request, which a watching agent is told about), and an agent status tag shows whether an agent is idle, working, waiting for input, or blocked. The application owns its state: the board is stored in a SQLite database, people change it through the web UI (behind a token-link access gate), agents (and people in a terminal) through the `k-spec` CLI, and an MCP server comes next; nobody edits state by hand. Every edit in the browser is a command posted to the server and saved. What goes into git is a JSON dump of the board that the application writes and reads (`data/k-spec.dump.json`), never the database file. Cards carry sequential `#n` numbers, the card dialog has Overview / Spec / Execution / Activity tabs (Spec renders linked markdown files from the project; Execution shows where a card is being worked and the Claude session behind it, seeded for now), and the top bar names the project with links and a README sheet. A card's active work can also carry published services (title + URL, set through the `publishService` / `unpublishService` commands, seeded for now): the board card shows a globe that turns green when the browser's live check (`src/ui/shared/use-service-status.js`, a `no-cors` fetch) gets an answer, and the Overview tab lists them as new-tab buttons.
 
 ## Stack
 
@@ -24,7 +24,8 @@ src/
     server-note.js the note a running server leaves for the CLI.
   cli/             the k-spec command: main.js (entry, exit codes), command
                    tables (read-commands.js, write-commands.js), render.js
-                   (text output), connection.js (where the server is).
+                   (text output), connection.js (where the server is), watch.js
+                   (the command that waits and prints open requests).
   ui/              React components, the board context store (useBoard).
   components/ui/   shadcn-generated primitives.
   app/             Next.js App Router entry; wires everything together.
@@ -35,6 +36,7 @@ src/
     files/[...path]/       /files/<path>: full-page view of one markdown file
   proxy.js         Next 16 request proxy (middleware) for the token gate.
 bin/               k-spec.mjs: the executable; gives src/cli/main.js the real world.
+.claude/skills/k-spec/   the skill that tells a Claude Code session how to use the board.
 scripts/           db-dump.mjs, db-load.mjs and the `@/` alias hook for plain node.
 drizzle/           generated SQL migrations, committed (never edit by hand).
 data/              k-spec.dump.json (committed); the SQLite file and the running
@@ -71,6 +73,8 @@ npm run db:generate  # after changing src/infrastructure/store/schema.js: genera
 npx k-spec help      # the CLI (needs the server running); `npm link` makes `k-spec` global
 K_SPEC_URL=http://host:3000 K_SPEC_TOKEN=… k-spec board   # the CLI from outside the project folder
 K_SPEC_AGENT=Claude k-spec comment 4 "done"                # comment as an agent (same as --agent Claude)
+k-spec comment 4 "plan this" --request                     # a request to the agent (the browser's "Send to agent")
+k-spec watch                                               # print open requests, one line each, until stopped
 K_SPEC_SERVER_FILE=/path/note.json npm run dev            # where the server leaves its note (default ./data/k-spec.server.json)
 ```
 
@@ -94,9 +98,17 @@ Dump and load: `data/k-spec.dump.json` is `{ "format": 1, "board": … }` with s
 
 `k-spec` (`bin/k-spec.mjs` → `src/cli/main.js`) is a thin client of the running server; it never opens the database or the dump. It reads the whole board from `GET /api/board`, turns what was typed (a card `#n`, a lane name, an item `c.i`, a service title) into ids with `src/application/board-lookup.js`, prints with the pure functions in `src/cli/render.js`, and posts to `POST /api/commands/<name>`. A command is one entry `{ usage, summary, options, arity, run }` in `read-commands.js` or `write-commands.js`; the help text is generated from those tables. `runCli` takes its whole world as arguments (argv, env, fetch, stdin, stdout, …) and returns the exit code, so tests run it against the fake server in `src/test/board-server.js` without a process.
 
-Commands: `board`, `show`, `comment`, `status`, `move`, `check`, `uncheck`, `add`, `delete`, `start`, `end`, `publish`, `unpublish`, and `run <command> <json>` for everything else. Output is compact plain text (no colour, no ids; `--json` for the machine form). Text that comes from the board goes through `oneLine` (one-line fields, confirmations, error lines) or is indented under its heading (descriptions, comments) in `render.js`, so a card's content cannot forge CLI output or drive the terminal; keep that when adding output. A comment is the person's unless `--agent <name>` or `K_SPEC_AGENT` says an agent wrote it. Failures are one `error: …` line on stderr; exit `1` refused, `2` usage, `3` no connection.
+Commands: `board`, `show`, `watch`, `comment`, `status`, `move`, `check`, `uncheck`, `add`, `delete`, `start`, `end`, `link`, `publish`, `unpublish`, and `run <command> <json>` for everything else. Output is compact plain text (no colour, no ids; `--json` for the machine form). Text that comes from the board goes through `oneLine` (one-line fields, confirmations, error lines) or is indented under its heading (descriptions, comments) in `render.js`, so a card's content cannot forge CLI output or drive the terminal; keep that when adding output. A comment is the person's unless `--agent <name>` or `K_SPEC_AGENT` says an agent wrote it. Failures are one `error: …` line on stderr; exit `1` refused, `2` usage, `3` no connection.
 
 Connection: `K_SPEC_URL` with `K_SPEC_TOKEN` when `K_SPEC_URL` is set; otherwise the note the server writes on start and removes on exit (`data/k-spec.server.json`: `{ url: "http://localhost:<port>", token, pid }`, mode 600, git-ignored). `K_SPEC_TOKEN` alone is ignored by the CLI because it is also the server's "fix the token" variable. The token is sent as the `k-spec-token` cookie; the access gate is unchanged.
+
+## Requests to the agent
+
+A request is a comment a person addressed to the agent: `addComment` with `request: true` (the "Send to agent" button, or `k-spec comment <n> … --request`). Only a request carries the `request` key; an ordinary comment has none, so boards and dumps from before requests are unchanged byte for byte. Only a person can send one. Whether a request is **open** is never stored: it is open while no agent comment comes after it on that card (`openRequests(card)` in `src/domain/card.js`, `boardOpenRequests(board)` in `src/domain/board.js`). The browser, `show`, `board` and `watch` all ask those two functions; do not add a second definition or a stored flag.
+
+`k-spec watch` (`src/cli/watch.js`) is the one command that waits. It is `lazy`: `runCli` gives it `ctx.connect()` instead of a ready `ctx.api`, plus `ctx.sleep` and `ctx.signal`, so it can outlive a server restart and be driven step by step in tests (`steps` in `src/cli/test-cli.js`). Every 2 s it reads `GET /api/board/version` and reads the board only when that changed or after an outage. It prints a request once per run, on one line: every field goes through `flat` (control characters and all white space collapsed), because the reader is Claude Code's Monitor, which treats each stdout line as an event. Connection reports (`k-spec: …`) also go to stdout for that reason. The server has no push channel and no event log; open requests are always derivable from the board, which is what makes restarts and gaps safe.
+
+The skill in `.claude/skills/k-spec/SKILL.md` is the agent's side of the contract (read the card, set `working`, reply once, set `waiting` or `idle`; never acknowledge with a comment, since the first agent comment answers the request). `src/cli/skill.test.js` fails if it names a command or option the CLI does not have.
 
 ## Git
 

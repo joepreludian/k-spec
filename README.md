@@ -43,7 +43,8 @@ npm link                  # once, to have `k-spec` everywhere
 |---|---|
 | `k-spec board [--lane <name>] [--status <status>]` | Lanes in order, one line per card |
 | `k-spec show <n> [--activity]` | One card in full |
-| `k-spec comment <n> <text> [--agent <name>]` | Add a comment (`-` reads stdin) |
+| `k-spec watch` | Print every open request to the agent, one line each, and keep running |
+| `k-spec comment <n> <text> [--agent <name>] [--request]` | Add a comment (`-` reads stdin); `--request` sends it to the agent |
 | `k-spec status <n> <status>` | `idle`, `working`, `waiting` (short for `waiting-for-input`), `blocked` |
 | `k-spec move <n> <lane> [--top]` | Move to the end of a lane, or its top |
 | `k-spec check <n> <item>` / `uncheck` | Tick an item by the number `show` prints, e.g. `1.2` |
@@ -51,6 +52,7 @@ npm link                  # once, to have `k-spec` everywhere
 | `k-spec delete <n>` | Delete a card, without asking |
 | `k-spec start <n> [--branch <b>] [--location <kind>:<name>] [--worktree <path>]` | Start work (default: current git branch, `host:<this machine>`) |
 | `k-spec end <n>` | End the work |
+| `k-spec link <n> <path> [<title>]` | Attach a markdown file of the project to the card (shown in its Spec tab) |
 | `k-spec publish <n> <title> <url>` / `unpublish <n> <title>` | Services on the active work |
 | `k-spec run <command> [<json>]` | Any other command, with raw ids (`k-spec show <n> --json` prints them) |
 
@@ -88,6 +90,30 @@ Comments (2)
 
 **Failures** are one line on stderr starting with `error:`. Exit codes: `0` done, `1` refused (a rule, or a card, lane or item that does not exist), `2` wrong usage, `3` no connection (server not running, not answering, or the token was rejected).
 
+## Requests to the agent
+
+A comment is a note for people. A **request** is a comment addressed to the agent: write it in the card's comment box and press **Send to agent** instead of **Comment** (in a terminal: `k-spec comment <n> "…" --request`). A request is open until an agent comments on that card; the comment shows "waiting for agent" and then "answered", and a card with open requests carries a small count on the board. One agent comment answers every request above it on the card. There is no way to cancel a request yet.
+
+`k-spec watch` is how an agent hears about them. It prints every open request when it starts and each new one within about 2 seconds, one line each, and nothing else:
+
+```
+$ k-spec watch
+watching k-spec at http://localhost:3000, 1 open request
+request #12 Refine the CLI [Backlog, idle] You, 2026-11-19 14:02: Let's plan this feature.
+```
+
+The line carries the first 200 characters; the agent reads the rest with `k-spec show 12 --activity`. A request is printed once per run, and again by the next run while it is still open, so nothing is lost when nobody was watching. If the server goes away the watch says so once (`k-spec: server not answering at …`), keeps trying, re-reads the server's note (a restarted server has a new token) and says `k-spec: connected to …` when it is back. It stops on Ctrl-C. `--json` prints one JSON object per line instead.
+
+**In Claude Code.** This repository ships a skill, `.claude/skills/k-spec/SKILL.md`. With it, a session:
+
+- reads the card when you name one in the chat ("let's refine k-spec #12"), with its history and linked files, so you do not have to paste context;
+- watches the board when you ask it to ("watch the board"): it runs `k-spec watch` under Claude Code's Monitor tool, which delivers each printed line to the chat and wakes the session. A monitor lives 30 minutes at most, so the agent starts it again each time;
+- handles a request: sets the card to `working`, does the work in the session, attaches files it wrote with `k-spec link`, replies once on the card, and sets `waiting` (you have to act) or `idle`.
+
+To make a project's sessions watch from the start, say so in that project's `CLAUDE.md`. To use the skill in another project, link or copy the folder into `~/.claude/skills/k-spec`, put `k-spec` on the path (`npm link`), and tell the CLI where the server is: `K_SPEC_URL` and `K_SPEC_TOKEN`, or `K_SPEC_SERVER_FILE=/path/to/k-spec/data/k-spec.server.json`.
+
+**What the access link is worth.** Whoever can write on the board can now give instructions to an agent that is watching it. Share the token link as you would share access to that agent.
+
 ## Viewing project files
 
 Cards can link markdown files from the project (`docs/specs/feature.md`), shown in the card's Spec tab, and the top bar opens the project README. Both read through `GET /api/files/<relative path>`, and `/files/<relative path>` shows a file full-page, so a file's address mirrors its place in the repo. The viewer serves only `.md`/`.markdown` files inside `K_SPEC_PROJECT_DIR` (default: the directory the server runs in), rejects anything with `..` or an absolute path, caps files at 1 MiB, and sits behind the same token gate. Relative links between markdown files keep working inside the viewer.
@@ -111,6 +137,8 @@ Domain-driven, in layers under `src/`: `domain` (pure data and rules), `applicat
 
 1. **Board UI** with the token gate, ticket numbers, the tabbed card with linked spec files and execution details, and the project top bar. *(done)*
 2. **SQLite store**: commands run on the server and are saved; JSON dump and load for git. *(done)*
-3. **CLI**: `k-spec`, a client of the server, the agent's view of the board. *(this slice)*
-4. **MCP server**: the same commands as tools, so Claude manages cards without touching files.
-5. **Card documents**: where a card's spec markdown lives and how agents attach it.
+3. **CLI**: `k-spec`, a client of the server, the agent's view of the board. *(done)*
+4. **Requests to the agent**: "Send to agent" in the browser, `k-spec watch`, and the Claude skill. *(this slice)*
+5. **Working agreement on the board**: spec file, approval, the plan as checklists, review, driven through requests.
+6. **MCP server**: the same commands as tools, so Claude manages cards without touching files.
+7. **Card documents**: where a card's spec markdown lives and how agents attach it.
