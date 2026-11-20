@@ -122,6 +122,34 @@ test("an outage is reported once on stdout, and the watch goes on", async () => 
   ]);
 });
 
+test("when the trouble changes, it says so: a server back with another token is not silence", async () => {
+  // K_SPEC_URL + K_SPEC_TOKEN from the environment: no note to re-read, so the old token stays wrong.
+  const { code, out } = await cli(["watch"], {
+    board: fixtureBoard(),
+    steps: [
+      (server) => (server.offline = true),
+      (server) => {
+        server.offline = false;
+        server.token = "new";
+      },
+      () => {}, // still rejected: said once
+      (server) => (server.offline = true),
+      (server) => {
+        server.offline = false;
+        server.token = "tok";
+      },
+    ],
+  });
+  expect(code).toBe(0);
+  expect(out.split("\n")).toEqual([
+    HEADER(0),
+    "k-spec: server not answering at http://k.test",
+    "k-spec: token rejected by http://k.test",
+    "k-spec: server not answering at http://k.test",
+    "k-spec: connected to http://k.test",
+  ]);
+});
+
 test("a request already printed is not printed again after an outage", async () => {
   const { out } = await cli(["watch"], {
     board: commentOn(fixtureBoard(), 7, { id: "r", body: "Once", request: true }),

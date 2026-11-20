@@ -67,6 +67,7 @@ export function installBoardServer(board, version = 1, { baseUrl = "", token = n
   const deps = { clock: fixedClock(NOW), idGenerator: sequentialIdGenerator("srv") };
   const server = {
     version,
+    token, // settable: a restarted server has a new one
     offline: false,
     gate: null,
     requests: [],
@@ -94,7 +95,7 @@ export function installBoardServer(board, version = 1, { baseUrl = "", token = n
   async function answer(fullUrl, options) {
     if (!fullUrl.startsWith(baseUrl)) return json(404, { error: "Not found" });
     const url = fullUrl.slice(baseUrl.length);
-    if (token !== null && options?.headers?.Cookie !== `k-spec-token=${token}`) return redirect();
+    if (server.token !== null && options?.headers?.Cookie !== `k-spec-token=${server.token}`) return redirect();
     const method = options?.method ?? "GET";
     const input = method === "POST" ? (parseInput(options.body) ?? undefined) : undefined;
     server.requests.push({ method, path: url, input });

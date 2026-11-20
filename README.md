@@ -102,7 +102,7 @@ watching k-spec at http://localhost:3000, 1 open request
 request #12 Refine the CLI [Backlog, idle] You, 2026-11-19 14:02: Let's plan this feature.
 ```
 
-The line carries the first 200 characters; the agent reads the rest with `k-spec show 12 --activity`. A request is printed once per run, and again by the next run while it is still open, so nothing is lost when nobody was watching. If the server goes away the watch says so once (`k-spec: server not answering at …`), keeps trying, re-reads the server's note (a restarted server has a new token) and says `k-spec: connected to …` when it is back. It stops on Ctrl-C. `--json` prints one JSON object per line instead.
+The line carries the first 200 characters; the agent reads the rest with `k-spec show 12 --activity`. A request is printed once per run, and again by the next run while it is still open, so nothing is lost when nobody was watching. If the server goes away the watch says so once (`k-spec: server not answering at …`), keeps trying, re-reads the server's note (a restarted server has a new token) and says `k-spec: connected to …` when it is back. If the trouble changes it says that too: `k-spec: token rejected by …` means the server is up but the token the watch has is no longer right, which happens when `K_SPEC_TOKEN` comes from the environment and the server was restarted without a fixed token. It stops on Ctrl-C. `--json` prints one JSON object per line instead.
 
 **In Claude Code.** This repository ships a skill, `.claude/skills/k-spec/SKILL.md`. With it, a session:
 

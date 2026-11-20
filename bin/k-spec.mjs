@@ -33,8 +33,15 @@ function gitBranch() {
 
 // A command that waits (`watch`) stops when the process is told to: the signal ends its sleep
 // and any request under way, and the command returns instead of being cut off mid-line.
+// A command that is not waiting that way (one reading stdin, say) must still die on the first
+// signal, so if the process is alive a moment later it exits as the signal would have made it.
 const stopping = new AbortController();
-for (const name of ["SIGINT", "SIGTERM"]) process.once(name, () => stopping.abort());
+for (const [name, code] of [["SIGINT", 130], ["SIGTERM", 143]]) {
+  process.once(name, () => {
+    stopping.abort();
+    setTimeout(() => process.exit(code), 250).unref();
+  });
+}
 
 try {
   process.exitCode = await runCli({

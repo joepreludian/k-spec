@@ -64,3 +64,19 @@ test("watch runs until it is told to stop, then ends cleanly", async () => {
   expect(stdout.trimEnd().split("\n")).toHaveLength(1);
   fs.rmSync(dir, { recursive: true, force: true });
 }, 15000);
+
+test("a command waiting on stdin still dies on the first signal", async () => {
+  // It gets as far as reading the comment from stdin (which never ends here) and waits there.
+  const child = spawn(process.execPath, [bin, "comment", "4", "-"], {
+    env: { ...process.env, K_SPEC_URL: "http://127.0.0.1:1", K_SPEC_TOKEN: "t", K_SPEC_SERVER_FILE: "" },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const ended = new Promise((resolve) => child.on("close", (code, signal) => resolve({ code, signal })));
+  await new Promise((resolve) => setTimeout(resolve, 1500)); // started and waiting
+  expect(child.exitCode).toBeNull();
+  child.kill("SIGTERM");
+  const late = new Promise((resolve) => setTimeout(() => resolve("still running"), 3000));
+  const result = await Promise.race([ended, late]);
+  child.kill("SIGKILL");
+  expect(result).toEqual({ code: 143, signal: null });
+}, 15000);

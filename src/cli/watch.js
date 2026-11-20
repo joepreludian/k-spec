@@ -38,6 +38,15 @@ const requestEvent = ({ card, lane, comment }) => ({
   commentId: comment.id,
 });
 
+/**
+ * Which kind of trouble an error is, as far as the reader cares: the server is `away` (not
+ * answering, or its note is missing), it `rejected` the token, or something `unexpected` answered.
+ */
+function troubleKind(error) {
+  if (error instanceof ConnectionError || error.reason === "unreachable") return "away";
+  return error.reason === "rejected" ? "rejected" : "unexpected";
+}
+
 const plural = (n) => `${n} open request${n === 1 ? "" : "s"}`;
 
 /**
@@ -45,9 +54,11 @@ const plural = (n) => `${n} open request${n === 1 ? "" : "s"}`;
  *
  * Every round it asks for the board's version, and reads the board only when that changed (or
  * when it has just connected: a new database can repeat a version). A request is printed once
- * per run. Trouble that can heal (server away, note missing, token changed) is said once, on
- * stdout because that is the only stream a monitor reads, and the next round works out the
- * connection afresh. Trouble that cannot heal is thrown.
+ * per run. Trouble that can heal (server away, note missing, token changed) is said on stdout,
+ * because that is the only stream a monitor reads: once, and again only when it turns into
+ * another kind of trouble (a server that comes back refusing the token must not look like one
+ * that is still away). The next round works out the connection afresh. Trouble that cannot
+ * heal is thrown.
  */
 async function watch(ctx) {
   const emit = (event, line) => ctx.out(ctx.json ? JSON.stringify(event) : line);
@@ -55,7 +66,7 @@ async function watch(ctx) {
   let link = null; // { url, api } while the server is answering
   let version = null;
   let connectedBefore = false;
-  let outageSaid = false;
+  let said = null; // the kind of trouble last reported in this outage
 
   while (!ctx.signal.aborted) {
     let url;
@@ -79,14 +90,15 @@ async function watch(ctx) {
         version = answer.version;
         link = current;
         connectedBefore = true;
-        outageSaid = false;
+        said = null;
       }
     } catch (error) {
       if (ctx.signal.aborted) break; // stopped in the middle of a request: not an outage
       const reason = connectionTrouble(error, url);
       if (reason === null || (error instanceof ConnectionError && !error.transient)) throw error;
-      if (!outageSaid) emit({ type: "disconnected", reason }, `k-spec: ${flat(reason)}`);
-      outageSaid = true;
+      const kind = troubleKind(error);
+      if (kind !== said) emit({ type: "disconnected", reason }, `k-spec: ${flat(reason)}`);
+      said = kind;
       link = null;
     }
     await ctx.sleep(WATCH_INTERVAL_MS);
