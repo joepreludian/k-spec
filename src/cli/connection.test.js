@@ -69,3 +69,18 @@ test("a pasted access link is cut down to the address, so the token in it is nev
 test("a note with an address that is not http(s) cannot be used", () => {
   expect(() => resolve({}, { url: "ftp//x", token: "t" })).toThrow("cannot read the server note: /p/data/k-spec.server.json");
 });
+
+test("only the note's problems can heal while a command waits", () => {
+  const transient = (env, value) => {
+    try {
+      resolve(env, value);
+    } catch (error) {
+      return error.transient;
+    }
+    return "no error";
+  };
+  expect(transient({}, null)).toBe(true); // the server has not started yet
+  expect(transient({}, "{ half a no")).toBe(true); // the server is writing it
+  expect(transient({ K_SPEC_URL: "http://h:1" }, null)).toBe(false);
+  expect(transient({ K_SPEC_URL: "ftp://h", K_SPEC_TOKEN: "t" }, null)).toBe(false);
+});

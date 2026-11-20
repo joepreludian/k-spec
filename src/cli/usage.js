@@ -18,6 +18,10 @@ export function usageText(commands) {
     "  K_SPEC_SERVER_FILE          otherwise the note the running server leaves (default data/k-spec.server.json)",
     "  K_SPEC_AGENT                name of the agent writing comments (same as comment --agent <name>)",
     "",
+    "Requests to the agent:",
+    "  comment --request   the comment is a request; it stays open until an agent comments on that card",
+    "  watch               one line per open request, for a monitor to read; lines starting k-spec: report its connection",
+    "",
     "Exit codes: 0 done, 1 refused, 2 usage, 3 no connection",
   ].join("\n");
 }

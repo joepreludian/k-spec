@@ -20,7 +20,7 @@ test("help needs no server", async () => {
 
 test("usage names the settings an agent needs", async () => {
   const { out } = await cli(["help"]);
-  for (const word of ["--json", "K_SPEC_URL", "K_SPEC_TOKEN", "K_SPEC_AGENT", "K_SPEC_SERVER_FILE", "board", "show <n>"]) {
+  for (const word of ["--json", "K_SPEC_URL", "K_SPEC_TOKEN", "K_SPEC_AGENT", "K_SPEC_SERVER_FILE", "board", "show <n>", "watch", "--request", "Requests to the agent"]) {
     expect(out).toContain(word);
   }
 });

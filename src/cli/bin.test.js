@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -38,3 +38,29 @@ test("it is executable and declared in package.json", () => {
   expect(fs.statSync(bin).mode & 0o111).not.toBe(0);
   expect(JSON.parse(fs.readFileSync("package.json", "utf8")).bin).toEqual({ "k-spec": "bin/k-spec.mjs" });
 });
+
+test("watch runs until it is told to stop, then ends cleanly", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kspec-watch-"));
+  const child = spawn(process.execPath, [bin, "watch"], {
+    cwd: dir,
+    env: { ...process.env, K_SPEC_URL: "", K_SPEC_TOKEN: "", K_SPEC_SERVER_FILE: "" },
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stderr.on("data", (chunk) => (stderr += chunk));
+  const firstLine = new Promise((resolve) => {
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      if (stdout.includes("\n")) resolve();
+    });
+  });
+  const ended = new Promise((resolve) => child.on("close", (code, signal) => resolve({ code, signal })));
+  await Promise.race([firstLine, ended]);
+  expect(stdout).toMatch(/^k-spec: server not running \(no .*k-spec\.server\.json/);
+  expect(child.exitCode).toBeNull(); // still watching
+  child.kill("SIGTERM");
+  expect(await ended).toEqual({ code: 0, signal: null });
+  expect(stderr).toBe("");
+  expect(stdout.trimEnd().split("\n")).toHaveLength(1);
+  fs.rmSync(dir, { recursive: true, force: true });
+}, 15000);

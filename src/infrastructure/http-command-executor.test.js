@@ -121,3 +121,24 @@ test("an answer that claims json but is not is unexpected", async () => {
   await expect(remote(async () => broken).execute("endWork", {})).rejects.toMatchObject({ reason: "unexpected" });
   await expect(remote(async () => broken).getBoard()).rejects.toMatchObject({ reason: "unexpected" });
 });
+
+test("getVersion asks the version endpoint with the token and resolves the number", async () => {
+  const fetch = vi.fn(async () => response(200, { version: 7 }));
+  expect(await remote(fetch).getVersion()).toBe(7);
+  expect(fetch.mock.calls[0]).toEqual([
+    "http://k.test/api/board/version",
+    { headers: { Cookie: "k-spec-token=tok" }, redirect: "manual" },
+  ]);
+});
+
+test("getVersion says why it failed, like every other call", async () => {
+  for (const body of [{}, { version: "7" }, { version: 1.5 }, null]) {
+    await expect(remote(async () => response(200, body)).getVersion()).rejects.toMatchObject({ reason: "unexpected" });
+  }
+  await expect(remote(async () => response(307, null, { type: null })).getVersion()).rejects.toMatchObject({ reason: "rejected" });
+  const down = async () => {
+    throw new TypeError("refused");
+  };
+  await expect(remote(down).getVersion()).rejects.toMatchObject({ reason: "unreachable" });
+  await expect(remote(async () => response(404, { error: "Not found" })).getVersion()).rejects.toMatchObject({ reason: "unexpected" });
+});

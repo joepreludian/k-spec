@@ -21,7 +21,8 @@ const isObject = (value) => typeof value === "object" && value !== null && !Arra
  * CommandExecutor port over HTTP: `execute(name, input)` posts to `/api/commands/<name>` and
  * resolves with the server's `{ board, version, … }`. A broken domain rule (422) is thrown as a
  * `DomainError` carrying the server's message and code; anything else as `CommandFailed`.
- * `getBoard()` reads `{ board, version }` from `/api/board`.
+ * `getBoard()` reads `{ board, version }` from `/api/board`; `getVersion()` reads the version
+ * alone from `/api/board/version`, the cheap "has anything changed?" check.
  *
  * In the browser the defaults apply: relative URLs, the cookie the browser already holds.
  * A caller elsewhere (the CLI) gives `baseUrl` and `token`; the token travels as the access
@@ -30,6 +31,8 @@ const isObject = (value) => typeof value === "object" && value !== null && !Arra
 export function createHttpCommandExecutor({ fetch = (...args) => globalThis.fetch(...args), baseUrl = "", token = null } = {}) {
   const remote = token === null ? {} : { redirect: "manual" };
   const withToken = (headers) => (token === null ? headers : { ...headers, Cookie: `k-spec-token=${token}` });
+
+  const reading = () => ({ ...(token === null ? {} : { headers: withToken({}) }), ...remote });
 
   async function request(path, options, accepted) {
     let res;
@@ -62,10 +65,14 @@ export function createHttpCommandExecutor({ fetch = (...args) => globalThis.fetc
       );
     },
     async getBoard() {
-      const headers = withToken({});
-      const body = await request("/api/board", { ...(token === null ? {} : { headers }), ...remote }, [200]);
+      const body = await request("/api/board", reading(), [200]);
       if (!isObject(body) || !isObject(body.board)) throw new CommandFailed("unexpected");
       return body;
+    },
+    async getVersion() {
+      const body = await request("/api/board/version", reading(), [200]);
+      if (!isObject(body) || !Number.isInteger(body.version)) throw new CommandFailed("unexpected");
+      return body.version;
     },
   };
 }

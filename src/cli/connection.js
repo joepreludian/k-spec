@@ -1,8 +1,13 @@
-/** The CLI cannot tell where the server is, or how to get past its access gate. */
+/**
+ * The CLI cannot tell where the server is, or how to get past its access gate. `transient` is
+ * true when waiting can fix it (the server's note is not there yet, or is being written) and
+ * false when only the caller can (the environment variables are wrong).
+ */
 export class ConnectionError extends Error {
-  constructor(message) {
+  constructor(message, { transient = false } = {}) {
     super(message);
     this.name = "ConnectionError";
+    this.transient = transient;
   }
 }
 
@@ -21,7 +26,7 @@ function address(value) {
 }
 
 function fromNote(noteFile, readFile) {
-  const unreadable = () => new ConnectionError(`cannot read the server note: ${noteFile}`);
+  const unreadable = () => new ConnectionError(`cannot read the server note: ${noteFile}`, { transient: true });
   let content;
   try {
     content = readFile(noteFile);
@@ -31,6 +36,7 @@ function fromNote(noteFile, readFile) {
   if (content === null) {
     throw new ConnectionError(
       `server not running (no ${noteFile}; start it with npm run dev, or set K_SPEC_URL and K_SPEC_TOKEN)`,
+      { transient: true },
     );
   }
   let note;
@@ -57,4 +63,21 @@ export function resolveConnection({ env, noteFile, readFile }) {
   const url = address(env.K_SPEC_URL);
   if (!url) throw new ConnectionError("K_SPEC_URL is not an http(s) address");
   return { url, token };
+}
+
+const UNANSWERED = {
+  unreachable: (url) => `server not answering at ${url}`,
+  rejected: (url) => `token rejected by ${url}`,
+};
+
+/**
+ * What to tell the caller when `error` means "no connection": a `ConnectionError`'s own message,
+ * or, for a request to `url` the server did not answer as itself (the executor's `CommandFailed`,
+ * recognised by name so this module needs nothing from infrastructure), which way it failed.
+ * Null for any other error.
+ */
+export function connectionTrouble(error, url) {
+  if (error instanceof ConnectionError) return error.message;
+  if (error?.name !== "CommandFailed") return null;
+  return (UNANSWERED[error.reason] ?? ((address) => `unexpected answer from ${address}`))(url);
 }
