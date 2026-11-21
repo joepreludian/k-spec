@@ -74,7 +74,8 @@ async function boardPort(wanted, stored, { randomBytes, portIsFree }) {
  * launcher, this machine's settings, the skill), or brings a project that is set up to the image
  * it runs from. It needs no server. Everything is decided and checked first; only then are files
  * written, so a refusal leaves the folder as it was. What a project already has is kept: its
- * id, name, token, port and host name change only when the person passes the option for them.
+ * id, name, token, port, host name and whether it saves on every change (`--auto-dump`,
+ * `--no-auto-dump`) change only when the person passes the option for them.
  */
 async function init({ env, cwd, readFile, local, out }, { values }) {
   const image = imageName(env);
@@ -96,6 +97,19 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
   }
   const settingsText = readFile(files.settings);
   const stored = readEnv(settingsText ?? "");
+
+  // Saving on every change is the project's, not the machine's: it is kept in the compose file.
+  if (values["auto-dump"] && values["no-auto-dump"]) throw new UsageError("--auto-dump and --no-auto-dump cannot both be given");
+  const autoDump = values["auto-dump"] ? true : values["no-auto-dump"] ? false : (known?.autoDump ?? true);
+  // While it was on, the board's database was inside the container. A file in the data folder is
+  // then from before and older than the dump, and with saving off the server would open it,
+  // never read the dump, and write the old board over the dump when it stops.
+  const leftover = path.join(dir, "data", "k-spec.db");
+  if (!autoDump && known?.autoDump !== false && local.fileExists(leftover)) {
+    throw new Refused(
+      `${leftover} is a database from before this project saved on every change; with saving off it would be used instead of the dump (remove .k-spec/data/k-spec.db* and run this again)`,
+    );
+  }
 
   const name = projectName(values.name ?? known?.name ?? path.basename(cwd));
   const projectId = known?.id ?? hex(local.randomBytes(8));
@@ -132,7 +146,7 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
   makeDir(path.join(dir, "data"));
   write(files.gitignore, renderGitignore());
   write(files.settings, mergeEnv(settingsText, changes), 0o600);
-  write(files.compose, renderCompose({ image, name, slug, projectId }));
+  write(files.compose, renderCompose({ image, name, slug, projectId, autoDump }));
   write(files.launcher, renderLauncher({ image, slug, projectId }), 0o755);
 
   // In k-spec's own repository the skill folder is a link to the skill's source: never write through it.
@@ -151,7 +165,9 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
       "Start the board:   docker compose -f .k-spec/compose.yaml up -d --wait",
       "Access link:       docker compose -f .k-spec/compose.yaml logs k-spec",
       `Commit:            ${toCommit.join(" ")}`,
-      "                   and .k-spec/data/k-spec.dump.json once the board has written it",
+      autoDump
+        ? "                   and .k-spec/data/k-spec.dump.json, there as soon as the board has started"
+        : "                   and .k-spec/data/k-spec.dump.json, written when the board stops",
       ...(skillLinked ? ["", "Skill not written: .claude/skills/k-spec is a link."] : []),
       ...(movedFrom === null
         ? []
@@ -163,9 +179,15 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
 /** The command that sets a project up. It talks to no server (`lazy`), only to the folder it runs in. */
 export const INIT_COMMANDS = {
   init: {
-    usage: "init [--name <name>] [--port <n>] [--host <name>]",
+    usage: "init [--name <name>] [--port <n>] [--host <name>] [--auto-dump | --no-auto-dump]",
     summary: "set this folder up as a k-spec project: board, launcher, settings and skill (run from the k-spec image; no server needed)",
-    options: { name: { type: "string" }, port: { type: "string" }, host: { type: "string" } },
+    options: {
+      name: { type: "string" },
+      port: { type: "string" },
+      host: { type: "string" },
+      "auto-dump": { type: "boolean" },
+      "no-auto-dump": { type: "boolean" },
+    },
     arity: [0, 0],
     lazy: true,
     run: init,

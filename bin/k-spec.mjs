@@ -47,6 +47,7 @@ const local = {
       return false;
     }
   },
+  fileExists: (file) => fs.existsSync(file),
   user: () => ({ uid: process.getuid(), gid: process.getgid() }),
   randomBytes,
   portIsFree,

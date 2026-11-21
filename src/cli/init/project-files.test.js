@@ -66,7 +66,7 @@ const ODD_NAMES = ["My App", `a "q" 'p' #x: y`, "cost $5 `now` $(id)", "Ünïcod
 test.each(ODD_NAMES)("the project can be read back from the compose file: %s", (name) => {
   const slug = slugOf(name) || "p12345678";
   const text = renderCompose(project(name, slug));
-  expect(readComposeHeader(text)).toEqual({ id: ID, name, slug });
+  expect(readComposeHeader(text)).toEqual({ id: ID, name, slug, autoDump: true });
   expect(text.split("\n")[0].startsWith("# k-spec-project: ")).toBe(true);
 });
 
@@ -118,7 +118,7 @@ test.each([
 
 test("what init generates is always read back: a fallback slug, the longest slug", () => {
   for (const slug of ["p01234567", "a".repeat(40), "a-b-c", "x"]) {
-    expect(readComposeHeader(renderCompose(project("Any", slug)))).toEqual({ id: ID, name: "Any", slug });
+    expect(readComposeHeader(renderCompose(project("Any", slug)))).toEqual({ id: ID, name: "Any", slug, autoDump: true });
   }
 });
 
@@ -242,9 +242,45 @@ test("a project's copy of the skill says, right after the front matter, that the
   const start = "---\nname: k-spec\ndescription: d\n---\n\n> **In this project the `k-spec` command is the file `.k-spec/k-spec`**";
   expect(copy.startsWith(start)).toBe(true);
   expect(copy).toContain("`.k-spec/k-spec watch`");
-  expect(copy).toContain(".k-spec/data/");
+  // The dump is the board; with saving on every change there is no database beside it.
+  expect(copy).toContain("`.k-spec/data/k-spec.dump.json`");
+  expect(copy).not.toContain("database");
   // Whoever edits the copy must learn that the next init overwrites it.
   expect(copy).toMatch(/written by `k-spec init`[^.]*rewritten/);
   expect(copy.endsWith("\n\n# Title\nbody `k-spec board`\n")).toBe(true);
   expect(() => renderProjectSkill("# no front matter\n")).toThrow("the skill has no front matter");
+});
+
+test("the header carries the switch only when it is off", () => {
+  const first = (options) => renderCompose({ ...project("My App"), ...options }).split("\n")[0];
+  expect(first({ autoDump: false })).toBe(`# k-spec-project: {"id":"${ID}","name":"My App","slug":"my-app","autoDump":false}`);
+  expect(first({ autoDump: true })).toBe(`# k-spec-project: {"id":"${ID}","name":"My App","slug":"my-app"}`);
+  expect(first({})).toBe(first({ autoDump: true }));
+});
+
+test("the switch is read back, and only as the boolean false", () => {
+  expect(readComposeHeader(renderCompose({ ...project("My App"), autoDump: false })).autoDump).toBe(false);
+  const header = (extra) => `# k-spec-project: {"id":"${ID}","name":"n","slug":"s"${extra}}\n`;
+  expect(readComposeHeader(header("")).autoDump).toBe(true);
+  expect(readComposeHeader(header(',"autoDump":false')).autoDump).toBe(false);
+  for (const value of ["true", '"false"', "0", "null", '"off"']) expect(readComposeHeader(header(`,"autoDump":${value}`))).toBeNull();
+});
+
+test("with saving on, the database is inside the container", () => {
+  const text = renderCompose(project("My App"));
+  expect(text.split("\n")).toContain("      K_SPEC_DB: /tmp/k-spec.db");
+  expect(text).not.toContain("K_SPEC_AUTO_DUMP");
+});
+
+test("with saving off, the server is told and the database stays in the data folder", () => {
+  const text = renderCompose({ ...project("My App"), autoDump: false });
+  expect(text.split("\n")).toContain('      K_SPEC_AUTO_DUMP: "off"');
+  expect(text).not.toContain("K_SPEC_DB");
+});
+
+test("the board has a network of its own and leaves the default one alone", () => {
+  const text = renderCompose(project("My App"));
+  expect(text).toContain("\n    networks:\n      - k-spec\n");
+  expect(text.endsWith("\nnetworks:\n  k-spec:\n    name: k-spec-my-app\n")).toBe(true);
+  expect(text).not.toContain("default:");
 });

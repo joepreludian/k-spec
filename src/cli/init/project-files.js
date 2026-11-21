@@ -9,17 +9,31 @@ export function slugOf(name) {
 
 const HEADER = "# k-spec-project: ";
 
+/** The first line of the compose file: the project. The switch is in it only when it is off. */
+function header({ projectId, name, slug, autoDump }) {
+  return `${HEADER}${JSON.stringify({ id: projectId, name, slug, ...(autoDump ? {} : { autoDump: false }) })}`;
+}
+
 /**
  * `.k-spec/compose.yaml`: the board service of one project. Container and network carry the
  * slug, so they do not depend on the folder; everything that differs per machine (token, port,
  * host name, owner) comes from `.env` beside the file, under names of its own, so nothing
  * exported in a shell for the server or the CLI leaks in. The first line is the project itself
- * (id, name, slug), which `init` reads back when it runs again or in a fresh clone.
+ * (id, name, slug, and whether saving on every change is off), which `init` reads back when it
+ * runs again or in a fresh clone.
+ *
+ * With saving on every change (`autoDump`, the default) the dump is the board and the database
+ * a cache, kept inside the container. With it off the database is the board between two stops
+ * and stays where the image puts it, in the data folder.
+ *
+ * The board has a network of its own. Redefining `default` would, once this file is included
+ * in a project's own compose file, rename the network of that project's services.
  */
-export function renderCompose({ image, name, slug, projectId }) {
+export function renderCompose({ image, name, slug, projectId, autoDump = true }) {
   // A JSON string is a YAML double-quoted string; Compose then needs each $ doubled to leave it alone.
   const nameYaml = JSON.stringify(name).replaceAll("$", "$$$$");
-  return `${HEADER}${JSON.stringify({ id: projectId, name, slug })}
+  const storage = autoDump ? "K_SPEC_DB: /tmp/k-spec.db" : 'K_SPEC_AUTO_DUMP: "off"';
+  return `${header({ projectId, name, slug, autoDump })}
 # Written by \`k-spec init\` and rewritten every time it runs: do not edit.
 # This machine's settings (token, port, host name) are in .env beside this file.
 name: "\${K_SPEC_BOARD_PROJECT:?this machine has no settings yet - run k-spec init in this project}"
@@ -37,13 +51,16 @@ services:
       K_SPEC_HOST: "\${K_SPEC_BOARD_HOST:-localhost}"
       K_SPEC_BOARD_NAME: ${nameYaml}
       K_SPEC_NOTE_URL: "http://k-spec:\${K_SPEC_BOARD_PORT:?}"
+      ${storage}
     volumes:
       - ./data:/data
       - ..:/project:ro
+    networks:
+      - k-spec
     labels:
       k-spec.project: "${projectId}"
 networks:
-  default:
+  k-spec:
     name: k-spec-${slug}
 `;
 }
@@ -58,8 +75,10 @@ const filled = (value) => typeof value === "string" && value.length > 0;
 const matches = (value, pattern) => typeof value === "string" && pattern.test(value);
 
 /**
- * The project a compose file written by `renderCompose` belongs to: `{ id, name, slug }`, or
- * null for any other text, including a header whose id or slug is not in the form init writes.
+ * The project a compose file written by `renderCompose` belongs to: `{ id, name, slug, autoDump }`,
+ * or null for any other text, including a header whose id or slug is not in the form init
+ * writes. `autoDump` is true unless the header says `"autoDump":false`; any other value for that
+ * key is not something init writes, and makes the header invalid.
  */
 export function readComposeHeader(text) {
   const [first] = text.split("\n");
@@ -73,7 +92,9 @@ export function readComposeHeader(text) {
   if (typeof project !== "object" || project === null) return null;
   const { id, name, slug } = project;
   const valid = matches(id, PROJECT_ID) && matches(slug, SLUG) && slug.length <= SLUG_LIMIT && filled(name);
-  return valid ? { id, name, slug } : null;
+  if (!valid) return null;
+  if (!Object.hasOwn(project, "autoDump")) return { id, name, slug, autoDump: true };
+  return project.autoDump === false ? { id, name, slug, autoDump: false } : null;
 }
 
 /**
@@ -167,7 +188,7 @@ const PROJECT_NOTE = `
 > **In this project the \`k-spec\` command is the file \`.k-spec/k-spec\`**, at the project root. It
 > runs the command in Docker against this project's own board. Wherever this skill writes
 > \`k-spec <something>\`, run \`.k-spec/k-spec <something>\` from the project root; the Monitor
-> command is \`.k-spec/k-spec watch\`. The board's dump and database are in \`.k-spec/data/\`.
+> command is \`.k-spec/k-spec watch\`. The board's dump is \`.k-spec/data/k-spec.dump.json\`.
 >
 > This copy is written by \`k-spec init\` and rewritten every time it runs: change the skill in
 > k-spec itself, not here.

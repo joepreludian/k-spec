@@ -25,6 +25,7 @@ function folder({ cwd = CWD, uid = 501, gid = 1000, taken = new Set(), links = [
     },
     makeDir: (dir) => dirs.add(dir),
     isSymlink: (file) => links.includes(file),
+    fileExists: (file) => files.has(file),
     user: () => ({ uid, gid }),
     randomBytes: (n) =>
       Uint8Array.from({ length: n }, () => {
@@ -204,7 +205,7 @@ test("--name on a later run renames the board and says how to remove the old one
   const before = { id: f.project().id, env: f.text(".k-spec/.env") };
   const renamed = await f.run(["--name", "Other Name"]);
   expect(renamed.code).toBe(0);
-  expect(f.project()).toEqual({ id: before.id, name: "Other Name", slug: "other-name" });
+  expect(f.project()).toEqual({ id: before.id, name: "Other Name", slug: "other-name", autoDump: true });
   expect(f.text(".k-spec/compose.yaml")).toContain("container_name: k-spec-other-name\n");
   expect(f.text(".k-spec/k-spec")).toContain("BOARD='k-spec-other-name'");
   expect(f.text(".k-spec/.env")).toBe(before.env);
@@ -339,7 +340,7 @@ test.each([
   [["--host", "a b"], "error: --host must be a host name"],
   [["--host", "h/x"], "error: --host must be a host name"],
   [["--host", "$(id)"], "error: --host must be a host name"],
-  [["extra"], "error: usage: k-spec init [--name <name>] [--port <n>] [--host <name>]"],
+  [["extra"], "error: usage: k-spec init [--name <name>] [--port <n>] [--host <name>] [--auto-dump | --no-auto-dump]"],
 ])("%j is a usage error", async (args, message) => {
   const f = folder();
   const result = await f.run(args);
@@ -433,5 +434,65 @@ test("a name from the board cannot break the output into lines", async () => {
 test("help lists init", async () => {
   const out = [];
   await runCli({ argv: ["help"], env: {}, cwd: "/", stdout: (line) => out.push(line) });
-  expect(out.join("\n")).toContain("  init [--name <name>] [--port <n>] [--host <name>]");
+  expect(out.join("\n")).toContain("  init [--name <name>] [--port <n>] [--host <name>] [--auto-dump | --no-auto-dump]");
+});
+
+test("a new project saves on every change: its database is inside the container", async () => {
+  const f = folder();
+  await f.run();
+  expect(f.project().autoDump).toBe(true);
+  expect(f.text(".k-spec/compose.yaml")).toContain("K_SPEC_DB: /tmp/k-spec.db");
+});
+
+test("--no-auto-dump is recorded in the project and kept by later runs", async () => {
+  const f = folder();
+  expect((await f.run(["--no-auto-dump"])).code).toBe(0);
+  expect((await f.run()).code).toBe(0);
+  expect(f.project().autoDump).toBe(false);
+  expect(f.text(".k-spec/compose.yaml")).toContain('K_SPEC_AUTO_DUMP: "off"');
+  expect(f.text(".k-spec/compose.yaml")).not.toContain("K_SPEC_DB");
+});
+
+test("--auto-dump turns it on again", async () => {
+  const f = folder();
+  await f.run(["--no-auto-dump"]);
+  expect((await f.run(["--auto-dump"])).code).toBe(0);
+  expect(f.project().autoDump).toBe(true);
+});
+
+test("both options together are a usage error and nothing is written", async () => {
+  const f = folder();
+  const result = await f.run(["--auto-dump", "--no-auto-dump"]);
+  expect(result.code).toBe(2);
+  expect(result.err).toMatch(/^error: .*--auto-dump.*--no-auto-dump/);
+  expect(f.files.size).toBe(0);
+});
+
+test("turning saving off is refused while a database from before is in the data folder", async () => {
+  const f = folder();
+  await f.run();
+  const before = f.text(".k-spec/compose.yaml");
+  f.put(".k-spec/data/k-spec.db", "x");
+  const result = await f.run(["--no-auto-dump"]);
+  expect(result.code).toBe(1);
+  expect(result.err).toContain(".k-spec/data/k-spec.db*");
+  expect(f.text(".k-spec/compose.yaml")).toBe(before);
+});
+
+test("a project that already has saving off keeps its database", async () => {
+  const f = folder();
+  await f.run(["--no-auto-dump"]);
+  f.put(".k-spec/data/k-spec.db", "x");
+  expect((await f.run()).code).toBe(0);
+  expect((await f.run(["--no-auto-dump"])).code).toBe(0);
+  expect(f.project().autoDump).toBe(false);
+});
+
+test("the next steps say when the dump is there to commit", async () => {
+  const on = await folder().run();
+  expect(on.out).toContain(".k-spec/data/k-spec.dump.json");
+  expect(on.out).toContain("as soon as the board has started");
+  const off = await folder().run(["--no-auto-dump"]);
+  expect(off.out).toContain(".k-spec/data/k-spec.dump.json");
+  expect(off.out).toContain("when the board stops");
 });

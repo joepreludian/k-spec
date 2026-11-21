@@ -150,6 +150,12 @@ grep -q "#1 .*Smoke card" "$ROOT/board.out" || fail "the new card is not on the 
 [ "$(grep -c '^  #' "$ROOT/board.out")" -eq 1 ] || fail "a new project's board should hold nothing but the card just added"
 ok "the launcher added a card to an otherwise empty board named \"$NAME\""
 
+# 3b. the board is saved on every change, and its database is not in the project
+grep -qF '"Smoke card"' "$ONE/.k-spec/data/k-spec.dump.json" || fail "the dump does not hold a change made a moment ago"
+ok "a change is in the dump while the board runs"
+[ -z "$(find "$ONE/.k-spec/data" -name 'k-spec.db*')" ] || fail "a database file is in the project's data folder: $(ls "$ONE/.k-spec/data")"
+ok "the project's folder holds no database"
+
 # 4. a request reaches a running watch
 k comment 1 "Please check" --request >/dev/null || fail "the launcher could not send a request"
 watch_start "$ROOT/watch1.out"
@@ -209,15 +215,37 @@ k board >/dev/null || fail "the first board stopped answering"
 grep -qF "belongs to another project" "$ROOT/twin.err" || fail "the second launcher should say whose board that is, got: $(cat "$ROOT/twin.err")"
 ok "a second project with the same name could not start, and its launcher refuses the first one's board"
 
-# 11. stopping writes the dump and removes the note
-k add Todo "Added after the dump" >/dev/null || fail "adding a second card"
+# 11. stopping is quick, removes the note, and has nothing left to save
+k add Todo "Added before the stop" >/dev/null || fail "adding a second card"
+grep -qF '"Added before the stop"' "$ONE/.k-spec/data/k-spec.dump.json" || fail "the dump lacks the last change before the stop"
+cp "$ONE/.k-spec/data/k-spec.dump.json" "$ROOT/before-stop.json"
 began=$(date +%s)
 compose "$ONE" stop >/dev/null 2>&1 || fail "docker compose stop"
 took=$(($(date +%s) - began))
 [ "$took" -lt 9 ] || fail "stopping took ${took}s: the server did not stop by itself"
 [ ! -e "$ONE/.k-spec/data/k-spec.server.json" ] || fail "the server's note is still there after the stop"
-grep -qF '"Added after the dump"' "$ONE/.k-spec/data/k-spec.dump.json" || fail "the dump written on stop lacks the last change"
-ok "stopping the board took ${took}s, wrote the dump and removed the note"
+cmp -s "$ROOT/before-stop.json" "$ONE/.k-spec/data/k-spec.dump.json" || fail "stopping changed a dump that already held every change"
+ok "stopping the board took ${took}s, removed the note and left the dump as it was"
+
+# 11b. a dump replaced on disk (a git pull) is what the board shows after a restart
+compose "$ONE" start >/dev/null 2>&1 || fail "docker compose start"
+wait_for 60 "the board to answer again" k board
+k add Todo "Not in the pulled dump" >/dev/null || fail "adding a third card"
+cp "$ROOT/before-stop.json" "$ONE/.k-spec/data/k-spec.dump.json"
+compose "$ONE" restart >/dev/null 2>&1 || fail "docker compose restart"
+wait_for 60 "the board to answer after the restart" k board
+cmp -s "$ROOT/before-stop.json" "$ONE/.k-spec/data/k-spec.dump.json" || fail "restarting the board overwrote a dump that was replaced on disk"
+k board >"$ROOT/restarted.out" || fail "the launcher could not read the restarted board"
+! grep -q "Not in the pulled dump" "$ROOT/restarted.out" || fail "the restarted board did not start from the dump on disk"
+grep -q "Added before the stop" "$ROOT/restarted.out" || fail "the restarted board lost a card that is in the dump"
+ok "a dump replaced on disk is what the board shows after a restart"
+
+# 11c. the container can be thrown away: the dump is the board
+compose "$ONE" down --timeout 5 >/dev/null 2>&1 || fail "docker compose down"
+compose "$ONE" up -d --wait >/dev/null 2>&1 || fail "the board did not start again after its container was removed"
+k board >"$ROOT/recreated.out" || fail "the launcher could not read the recreated board"
+grep -q "Smoke card" "$ROOT/recreated.out" && grep -q "Added before the stop" "$ROOT/recreated.out" || fail "the recreated board does not hold the cards of the dump"
+ok "the board came back from the dump after its container was removed"
 
 # 12. nothing belongs to anyone but the caller
 strangers=$(find "$ONE" ! -user "$(id -u)" 2>/dev/null | head -5)
@@ -229,5 +257,19 @@ compose "$ONE" down --timeout 5 >/dev/null 2>&1 || fail "docker compose down"
 k board >/dev/null 2>"$ROOT/down.err" && fail "the launcher answered with no board"
 grep -qF "this project's board is not running" "$ROOT/down.err" || fail "with no board the launcher should say so, got: $(cat "$ROOT/down.err")"
 ok "with the board removed the launcher says it is not running"
+
+# 14. a project that turned saving on every change off: the database is the board until it stops
+init "$TWO" --no-auto-dump >"$ROOT/init-off.out" 2>&1 || {
+  cat "$ROOT/init-off.out" >&2
+  fail "init --no-auto-dump"
+}
+compose "$TWO" up -d --wait >/dev/null 2>&1 || fail "the board of the project with saving off did not start"
+"$TWO/.k-spec/k-spec" add Backlog "Kept in the database" >/dev/null || fail "adding a card with saving off"
+! grep -qsF '"Kept in the database"' "$TWO/.k-spec/data/k-spec.dump.json" || fail "with saving off a change was written to the dump at once"
+[ -f "$TWO/.k-spec/data/k-spec.db" ] || fail "with saving off the database should be in the data folder: $(ls "$TWO/.k-spec/data")"
+compose "$TWO" stop >/dev/null 2>&1 || fail "docker compose stop (saving off)"
+grep -qF '"Kept in the database"' "$TWO/.k-spec/data/k-spec.dump.json" || fail "with saving off, stopping did not write the dump"
+compose "$TWO" down --timeout 5 >/dev/null 2>&1 || fail "docker compose down (saving off)"
+ok "with saving off the dump is written when the board stops, and the database is in the data folder"
 
 printf 'smoke test passed: %s\n' "$IMAGE"

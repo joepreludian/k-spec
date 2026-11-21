@@ -51,7 +51,7 @@ function parse(command, words) {
  * `ctx.connect()` itself, as often as it needs, and so can outlive a restart of the server.
  *
  * `local` is the machine as `init`, the one command that writes files, needs it:
- * `writeFile(file, text, mode)`, `makeDir(dir)`, `isSymlink(file)`, `user()` (`{ uid, gid }`),
+ * `writeFile(file, text, mode)`, `makeDir(dir)`, `isSymlink(file)`, `fileExists(file)`, `user()` (`{ uid, gid }`),
  * `randomBytes(n)`, `portIsFree(port)` (a promise) and `readSkill()` (the shipped skill's text).
  */
 export async function runCli({ argv, env, cwd, fetch, readFile, readStdin, stdout, stderr, hostname, gitBranch, sleep, signal, local }) {
