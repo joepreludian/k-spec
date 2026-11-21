@@ -35,7 +35,7 @@ The first command sets the project up, the second starts its board, the third sh
 
 Open the link once. It sets a cookie and you land on an empty board named after the folder, with the lanes Backlog, Todo, In Progress, Review and Done. The board keeps running in the background and comes back by itself after a reboot.
 
-`latest` is the newest release. `init` pins the project to the exact version it ran from and names it in its first line (`… image docker.io/joepreludian/k-spec:0.1.0`); from then on the project uses that version until you update it.
+`latest` is the newest release. `init` pins the project to the exact version it ran from and names it in its first line (`… image docker.io/joepreludian/k-spec:0.2.0`); from then on the project uses that version until you update it.
 
 `init` wrote these files:
 

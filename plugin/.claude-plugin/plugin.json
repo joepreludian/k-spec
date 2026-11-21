@@ -1,7 +1,7 @@
 {
   "name": "k-spec",
   "description": "Set a project's k-spec board up, start it for a task and stop it. k-spec is a kanban board where work is handed to AI agents as cards; each project's board runs in Docker and is saved in the project's git.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Jon Trigueiro"
   },
