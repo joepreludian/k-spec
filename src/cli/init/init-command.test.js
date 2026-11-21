@@ -537,3 +537,13 @@ test("a renamed board that is part of the project's compose file is moved throug
   const hint = renamed.out.split("\n").find((line) => line.includes("k-spec-my-app"));
   expect(hint).toContain("docker compose up -d k-spec");
 });
+
+test("--no-auto-dump is refused too in a folder that has a database but no project yet", async () => {
+  // A database of unknown age would be opened instead of any dump.
+  const f = folder();
+  f.put(".k-spec/data/k-spec.db", "x");
+  const result = await f.run(["--no-auto-dump"]);
+  expect(result.code).toBe(1);
+  expect(result.err).toContain(".k-spec/data/k-spec.db*");
+  expect(f.files.size).toBe(1);
+});

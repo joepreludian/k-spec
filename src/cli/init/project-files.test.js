@@ -304,6 +304,20 @@ test("the board is included when the project's compose file lists it under inclu
   expect(composeIncludesBoard("services: {}\ninclude: # ours\r\n  - .k-spec/compose.yaml\r\n")).toBe(true);
 });
 
+test("a list that is not indented under include is read too", () => {
+  // Valid YAML, and what many tools write.
+  for (const text of [
+    "include:\n- .k-spec/compose.yaml\n",
+    "include:\n- other.yaml\n- path: .k-spec/compose.yaml\nservices:\n  web:\n    image: nginx\n",
+    "include:\n- project_directory: .\n  path: ./.k-spec/compose.yaml\n",
+  ]) {
+    expect(composeIncludesBoard(text)).toBe(true);
+  }
+  // A list under another key is still not it.
+  expect(composeIncludesBoard("include:\n- other.yaml\nx-files:\n- .k-spec/compose.yaml\n")).toBe(false);
+  expect(composeIncludesBoard("x-files:\n- .k-spec/compose.yaml\ninclude:\n- other.yaml\n")).toBe(false);
+});
+
 test("naming the file anywhere else is not including it", () => {
   for (const text of [
     "",

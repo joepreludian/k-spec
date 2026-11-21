@@ -342,3 +342,9 @@ test("check takes the checklist's title", async () => {
   const missing = await run(["check", "4", "Plan.1"]);
   expect([missing.code, missing.err]).toEqual([1, 'error: Checklist "Plan" not found on card #4 (checklists: A, B)']);
 });
+
+test("checklist refuses a title the card already has, so a title always names one checklist", async () => {
+  const again = await run(["checklist", "4", " a ", "x"]);
+  expect([again.code, again.out, posts(again.server)]).toEqual([1, "", []]);
+  expect(again.err).toBe('error: Card #4 already has a checklist "A" (tick its items as A.<i>, or give this one another title)');
+});

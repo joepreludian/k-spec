@@ -1,6 +1,7 @@
 import {
   cardByNumber,
   checklistItemAt,
+  checklistsTitled,
   laneByName,
   normalizeStatus,
   parseCardNumber,
@@ -114,13 +115,22 @@ export const WRITE_COMMANDS = {
   uncheck: tick(false),
   checklist: {
     usage: "checklist <n> <title> [<item>...]",
-    summary: "add a checklist with its items to the card (a single - reads the items from stdin, one per line)",
+    summary: "add a checklist with its items to the card (a single - reads the items from stdin, one per line); a title the card already has is refused",
     options: {},
     arity: [2, Infinity],
     async run(ctx, { positionals: [n, title, ...words] }) {
       const fromStdin = words.length === 1 && words[0] === "-";
       const items = fromStdin ? (await ctx.readStdin()).split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : words;
       const { card, number } = await findCard(ctx.api, n);
+      // `check <n> <title>.<i>` names a checklist by its title, so the command that makes them
+      // keeps titles apart. It also makes a first plan step that runs twice harmless.
+      const [taken] = checklistsTitled(card, title);
+      if (taken) {
+        throw new DomainError(
+          `Card #${number} already has a checklist "${taken.title}" (tick its items as ${taken.title}.<i>, or give this one another title)`,
+          "CHECKLIST_EXISTS",
+        );
+      }
       const created = await ctx.api.execute("addChecklist", { cardId: card.id, title });
       const checklists = cardByNumber(created.board, number).card.checklists;
       const position = checklists.findIndex((entry) => entry.id === created.id) + 1;

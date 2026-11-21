@@ -37,6 +37,11 @@ export function laneByName(board, name) {
   throw new LookupError(`Lane "${name}" matches several lanes (${names(matches, "name")})`, "AMBIGUOUS");
 }
 
+/** The card's checklists with that title: the whole title, ignoring case and surrounding spaces. */
+export function checklistsTitled(card, title) {
+  return card.checklists.filter((entry) => same(entry.title, title));
+}
+
 /**
  * A checklist item of the card, named one of two ways: `c.i` (checklist c, item i, both counted
  * from 1, as `show` prints them), or `<checklist title>.<i>` (the whole title, ignoring case and
@@ -63,7 +68,7 @@ export function checklistItemAt(card, ref) {
   } else {
     const title = first.trim();
     if (!title) throw invalid();
-    const matches = card.checklists.filter((entry) => same(entry.title, title));
+    const matches = checklistsTitled(card, title);
     if (matches.length === 0) {
       throw new LookupError(`Checklist "${title}" not found on card #${card.number} (checklists: ${names(card.checklists, "title")})`);
     }

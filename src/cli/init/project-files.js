@@ -70,7 +70,7 @@ export const PROJECT_COMPOSE_FILES = Object.freeze(["compose.yaml", "compose.yml
 
 const BOARD_PATH = String.raw`(["']?)(?:\./)?\.k-spec/compose\.yaml\1\s*(?:#.*)?$`;
 // `- .k-spec/compose.yaml`, `- path: .k-spec/compose.yaml`, or `path:` on a line of its own in a longer entry.
-const BOARD_ENTRY = new RegExp(String.raw`^\s+(?:-\s*(?:path:\s*)?|path:\s*)` + BOARD_PATH);
+const BOARD_ENTRY = new RegExp(String.raw`^(?:\s*-\s*(?:path:\s*)?|\s+path:\s*)` + BOARD_PATH);
 const INCLUDE_KEY = /^include:\s*(?:#.*)?$/;
 
 /**
@@ -83,8 +83,9 @@ export function composeIncludesBoard(text) {
   let inInclude = false;
   for (const raw of text.split("\n")) {
     const line = raw.replace(/\r$/, "");
-    // A line that starts in the first column (and is not a comment) opens a top-level key.
-    if (/^[^\s#]/.test(line)) inInclude = INCLUDE_KEY.test(line);
+    // A line that starts in the first column opens a top-level key, unless it is a comment or
+    // a list item: YAML allows a list that is not indented under its key.
+    if (/^[^\s#-]/.test(line)) inInclude = INCLUDE_KEY.test(line);
     else if (inInclude && BOARD_ENTRY.test(line)) return true;
   }
   return false;

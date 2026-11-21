@@ -276,8 +276,12 @@ grep -qF '"Kept in the database"' "$TWO/.k-spec/data/k-spec.dump.json" || fail "
 compose "$TWO" down --timeout 5 >/dev/null 2>&1 || fail "docker compose down (saving off)"
 ok "with saving off the dump is written when the board stops, and the database is in the data folder"
 
-# 15. a board that is part of the project's own compose file
+# 15. a board that ran on its own moves into the project's own compose file
 init "$INC" >/dev/null 2>&1 || fail "init in the project that has a compose file"
+compose "$INC" up -d --wait >/dev/null 2>&1 || fail "the board did not start on its own before the move"
+"$INC/.k-spec/k-spec" add Backlog "Before the move" >/dev/null || fail "adding a card before the move"
+# Its container's name is taken: the board is taken down first, as the README says.
+compose "$INC" down --timeout 5 >/dev/null 2>&1 || fail "taking the board down before the move"
 cat >"$INC/compose.yaml" <<EOF
 include:
   - .k-spec/compose.yaml
@@ -301,7 +305,8 @@ grep -qF "START='docker compose up -d k-spec'" "$INC/.k-spec/k-spec" || fail "th
 }
 "$INC/.k-spec/k-spec" add Backlog "Included" >/dev/null || fail "the launcher of the included board could not add a card"
 grep -qF '"Included"' "$INC/.k-spec/data/k-spec.dump.json" || fail "the included board did not save to its own data folder"
-ok "a board included in the project's compose file starts with it, and its launcher works"
+"$INC/.k-spec/k-spec" board | grep -q "Before the move" || fail "the board lost a card on its way into the project's compose file"
+ok "a board that ran on its own moved into the project's compose file with its cards, and its launcher works"
 
 idle=$(cd "$INC" && docker compose ps -q idle)
 [ -n "$idle" ] || fail "the project's own service is not running"
