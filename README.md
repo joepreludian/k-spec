@@ -83,6 +83,7 @@ include:
 
 - Everyone who runs the project's compose then needs k-spec set up on their machine first. Without `.k-spec/.env`, every `docker compose` command in the project stops with "this machine has no settings yet - run k-spec init in this project".
 - The board runs under the project's own compose project name, like the project's other services (see the note on same-named projects below).
+- A board that was already started on its own has to be taken down before the project's compose can start it, because its container's name is taken: `docker compose -f .k-spec/compose.yaml down` (the board's file stays, and the board comes back from it). To go back, remove the entry, run `docker compose rm -sf k-spec` and `init`, and start the board with its own command again.
 
 **Several projects on one machine.** Run the same three commands in each project. Every `init` picks a port nobody is listening on, so the boards do not collide and can all be open in one browser.
 
@@ -112,7 +113,7 @@ The project keeps its token, port, name and board; the compose file, the launche
   docker compose -f .k-spec/compose.yaml exec k-spec npm run db:load
   ```
 
-  A running board does not notice the file changing under it, and its next change would overwrite it (git still has the version that was replaced). Stopping or restarting never rewrites the file.
+  A running board does not notice the file changing under it, and its next change would overwrite it (git still has the version that was replaced). Stopping or restarting does not rewrite the file; the one exception is a change the server could not write when it was made, which it writes when it stops.
 - **A merge conflict in the file** keeps the board from starting, with the file named, until the file is valid again. Take one side (`git checkout --ours` or `--theirs`); do not edit the file by hand.
 - **To turn saving on every change off**, run `init` with `--no-auto-dump`. The database then lives in `.k-spec/data/` and is the board between two stops. The file is written when the board stops (`stop`, `down`, a restart, a shutdown of the machine) and by `docker compose -f .k-spec/compose.yaml exec k-spec npm run db:dump`, and a board that has a database does not read the file (run `npm run db:load` the same way after pulling a newer one). `--auto-dump` turns saving back on. Turning it off in a project that had it on is refused while an old `.k-spec/data/k-spec.db` is there: that file is from before and would be used instead of the board's file.
 
@@ -192,7 +193,7 @@ The examples below write `k-spec`; in a project that is `.k-spec/k-spec`.
 | `k-spec status <n> <status>` | `idle`, `working`, `waiting` (short for `waiting-for-input`), `blocked` |
 | `k-spec move <n> <lane> [--top]` | Move to the end of a lane, or its top |
 | `k-spec check <n> <item>` / `uncheck` | Tick an item by the number `show` prints (`1.2`), or by its checklist's title and its number in it (`Plan.3`) |
-| `k-spec checklist <n> <title> [<item>...]` | Add a checklist with its items (a single `-` reads the items from stdin, one per line) |
+| `k-spec checklist <n> <title> [<item>...]` | Add a checklist with its items (a single `-` reads the items from stdin, one per line). A title the card already has is refused, so a title always names one checklist |
 | `k-spec add <lane> <title> [--description <text>]` | Create a card; prints its number |
 | `k-spec delete <n>` | Delete a card, without asking |
 | `k-spec start <n> [--branch <b>] [--location <kind>:<name>] [--worktree <path>]` | Start work (default: current git branch, `host:<this machine>`) |
@@ -200,13 +201,13 @@ The examples below write `k-spec`; in a project that is `.k-spec/k-spec`.
 | `k-spec link <n> <path> [<title>]` | Attach a markdown file of the project to the card (shown in its Spec tab) |
 | `k-spec publish <n> <title> <url>` / `unpublish <n> <title>` | Services on the active work |
 | `k-spec run <command> [<json>]` | Any other command, with raw ids (`k-spec show <n> --json` prints them) |
-| `k-spec init [--name <name>] [--port <n>] [--host <name>] [--no-auto-dump]` | Set a folder up as a k-spec project; run from the image (see "Install in a project"), needs no server |
+| `k-spec init [--name <name>] [--port <n>] [--host <name>] [--no-auto-dump]` | Set a folder up as a k-spec project; run from the image (see "Install in a project"), needs no server. `--auto-dump` turns saving on every change back on |
 
 `<n>` is the card's number, with or without `#`. Lanes and services are named by their whole name, ignoring case. Add `--json` to any command for JSON instead of text. Text that starts with a dash goes after `--`: `k-spec comment 4 -- "-1 from me"`.
 
 ```
 $ k-spec board
-k-spec  v12
+k-spec  v1763600000012
 Backlog (2)
   #7 idle     Lane folder markdown mapping
   #8 blocked  Drag preview flickers on Firefox  [bug]  2 comments
@@ -324,5 +325,5 @@ Domain-driven, in layers under `src/`: `domain` (pure data and rules), `applicat
 5. **Distribution**: one Docker image, a board per project set up with `k-spec init`, a launcher per project, CI and releases. *(done)*
 6. **The board in git, the plugin, tasks on the board**: the dump follows every change, a Claude Code plugin sets a board up and runs it, and a task built with the superpowers skills is tracked on its card. *(this slice)*
 7. **Working agreement on the board**: approval and review on the card, driven through requests.
-7. **MCP server**: the same commands as tools, so Claude manages cards without touching files.
-8. **Card documents**: where a card's spec markdown lives and how agents attach it.
+8. **MCP server**: the same commands as tools, so Claude manages cards without touching files.
+9. **Card documents**: where a card's spec markdown lives and how agents attach it.
