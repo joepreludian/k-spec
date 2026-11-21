@@ -234,3 +234,17 @@ test("a database from before requests opens with ordinary comments", async () =>
   now.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("the first board's version comes from firstVersion, every later one adds 1", async () => {
+  expect(repository.version()).toBe(0);
+  repository.replaceSync(seedBoard());
+  expect(repository.version()).toBe(1);
+
+  const other = openDatabase(":memory:");
+  const clocked = createSqliteBoardRepository(other.db, { firstVersion: () => 1763600000000 });
+  clocked.replaceSync(seedBoard());
+  expect(clocked.version()).toBe(1763600000000);
+  await clocked.save(seedBoard());
+  expect(clocked.version()).toBe(1763600000001);
+  other.close();
+});

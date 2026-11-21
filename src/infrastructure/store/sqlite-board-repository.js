@@ -202,13 +202,22 @@ function writeBoard(tx, board, version) {
  * Another process may write to the same file (`npm run db:load`), so every read runs in a
  * transaction (one moment of the database, however many selects) and every write takes the
  * write lock before reading the version. `snapshotSync` is the board with its version.
+ *
+ * The first board written into a database that holds none gets the version `firstVersion()`
+ * (1 unless told otherwise). The server passes the clock: its database may be thrown away, and
+ * a browser tab must never meet a version it already holds on a different board.
  */
-export function createSqliteBoardRepository(db) {
-  const versionIn = (tx) => tx.select({ version: t.board.version }).from(t.board).all()[0]?.version ?? 0;
+export function createSqliteBoardRepository(db, { firstVersion = () => 1 } = {}) {
+  const stored = (tx) => tx.select({ version: t.board.version }).from(t.board).all()[0]?.version;
+  const versionIn = (tx) => stored(tx) ?? 0;
+  const versionAfter = (tx) => {
+    const version = stored(tx);
+    return version === undefined ? firstVersion() : version + 1;
+  };
   const readSync = () => db.transaction((tx) => readBoard(tx));
   const snapshotSync = () => db.transaction((tx) => ({ board: readBoard(tx), version: versionIn(tx) }));
   const replaceSync = (board) => {
-    db.transaction((tx) => writeBoard(tx, board, versionIn(tx) + 1), { behavior: "immediate" });
+    db.transaction((tx) => writeBoard(tx, board, versionAfter(tx)), { behavior: "immediate" });
   };
   return {
     load: async () => readSync(),

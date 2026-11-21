@@ -31,19 +31,20 @@ export function autoDumpEnabled(env = process.env) {
 /**
  * Opens the board store. A database that holds no board yet is filled from the dump file when
  * there is one; otherwise with an empty board called `boardName` when that is given, else with
- * the sample board. A database that has a board never reads the dump.
+ * the sample board. A database that has a board never reads the dump, unless `startFromDump`
+ * is set: then a dump that is there replaces the stored board, in one load. That is how a
+ * server that saves on every change starts, the dump being the board and the database a cache.
+ * `firstVersion()` is the version of the first board written into an empty database.
  * Returns `{ repository, dump(), load(), close() }`; `dump` and `load` are the on-demand directions.
  */
-export function openStore({ dbFile, dumpFile, boardName = null }) {
+export function openStore({ dbFile, dumpFile, boardName = null, startFromDump = false, firstVersion }) {
   const database = openDatabase(dbFile);
-  const repository = createSqliteBoardRepository(database.db);
+  const repository = createSqliteBoardRepository(database.db, firstVersion ? { firstVersion } : {});
   const dump = () => dumpBoardSync({ repository, file: dumpFile });
   const load = () => loadDumpSync({ repository, file: dumpFile });
   try {
-    if (repository.isEmpty()) {
-      if (fs.existsSync(dumpFile)) load();
-      else repository.replaceSync(boardName ? starterBoard(boardName) : seedBoard());
-    }
+    if (fs.existsSync(dumpFile) && (startFromDump || repository.isEmpty())) load();
+    else if (repository.isEmpty()) repository.replaceSync(boardName ? starterBoard(boardName) : seedBoard());
   } catch (error) {
     database.close();
     throw error;

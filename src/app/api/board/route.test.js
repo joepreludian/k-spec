@@ -21,15 +21,18 @@ afterEach(() => {
   restore("K_SPEC_DB", saved.db);
   restore("K_SPEC_DUMP", saved.dump);
   fs.rmSync(dir, { recursive: true, force: true });
+  vi.restoreAllMocks();
 });
 
 test("GET /api/board returns the stored board and its version, uncached", async () => {
+  // A server's first version is the clock's, so that a database thrown away never repeats one.
+  vi.spyOn(Date, "now").mockReturnValue(1763600000000);
   const res = await GET();
   expect(res.status).toBe(200);
   expect(res.headers.get("cache-control")).toBe("no-store");
   const { board, version } = await res.json();
   expect(board).toEqual(seedBoard());
-  expect(version).toBe(1);
+  expect(version).toBe(1763600000000);
 });
 
 test("GET /api/board/version returns the same version, uncached", async () => {

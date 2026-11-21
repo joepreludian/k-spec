@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { systemClock } from "../clock.js";
 import { randomIdGenerator } from "../id-generator.js";
 import { DumpError } from "./board-dump.js";
@@ -16,14 +17,19 @@ const HOOK = Symbol.for("k-spec.shutdown-hook");
  * `saved()` is what the command route calls after a command changed the board. With saving on
  * every change (`autoDump`) it writes the dump. It never throws: a dump that cannot be written
  * is logged and remembered (`unsaved`) until a later write succeeds.
+ *
+ * With saving on every change the store starts from the dump when there is one, whatever the
+ * database holds (`openStore`'s `startFromDump`).
  */
 export function getServerStore() {
   if (!globalThis[KEY]) {
     const paths = storePaths();
-    const store = openStore(paths);
+    const autoDump = autoDumpEnabled();
+    // The clock, not 1, starts the count: see createSqliteBoardRepository.
+    const store = openStore({ ...paths, startFromDump: autoDump, firstVersion: () => Date.now() });
     const state = {
       ...store,
-      autoDump: autoDumpEnabled(),
+      autoDump,
       unsaved: false,
       queue: createCommandQueue(),
       deps: { repository: store.repository, clock: systemClock, idGenerator: randomIdGenerator },
@@ -39,6 +45,8 @@ export function getServerStore() {
       }
     };
     globalThis[KEY] = state;
+    // A board with no dump yet (a new project) gets one now, not at its first change.
+    if (autoDump && !fs.existsSync(paths.dumpFile)) state.saved();
   }
   return globalThis[KEY];
 }

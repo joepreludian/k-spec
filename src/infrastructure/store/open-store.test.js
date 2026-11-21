@@ -106,3 +106,50 @@ test("saving on every change is on unless K_SPEC_AUTO_DUMP says off", () => {
   for (const value of ["off", "OFF", " 0 ", "false", "no"]) expect(autoDumpEnabled({ K_SPEC_AUTO_DUMP: value })).toBe(false);
   for (const env of [{}, { K_SPEC_AUTO_DUMP: "" }, { K_SPEC_AUTO_DUMP: "on" }, { K_SPEC_AUTO_DUMP: "1" }]) expect(autoDumpEnabled(env)).toBe(true);
 });
+
+const storeNamed = (name) => {
+  const store = openStore(paths);
+  store.repository.replaceSync({ ...seedBoard(), name });
+  const version = store.repository.version();
+  store.close();
+  return version;
+};
+
+test("asked to start from the dump, a database that has a board is replaced by it, in one load", () => {
+  const before = storeNamed("Old");
+  writeDump(serializeDump({ ...seedBoard(), name: "Pulled" }));
+  const store = openStore({ ...paths, startFromDump: true });
+  expect(store.repository.readSync().name).toBe("Pulled");
+  expect(store.repository.version()).toBe(before + 1);
+  store.close();
+});
+
+test("asked to start from the dump, an empty database is filled from it once", () => {
+  writeDump(serializeDump({ ...seedBoard(), name: "Pulled" }));
+  const store = openStore({ ...paths, startFromDump: true, firstVersion: () => 500 });
+  expect(store.repository.readSync().name).toBe("Pulled");
+  expect(store.repository.version()).toBe(500);
+  store.close();
+});
+
+test("asked to start from the dump when there is none, the database is filled as usual and no dump is written", () => {
+  const store = openStore({ ...paths, boardName: "My App", startFromDump: true });
+  expect(store.repository.readSync().name).toBe("My App");
+  store.close();
+  expect(fs.existsSync(paths.dumpFile)).toBe(false);
+});
+
+test("a dump that cannot be read stops the opening even when the database has a board", () => {
+  storeNamed("Old");
+  writeDump("{ nope");
+  let error;
+  try {
+    openStore({ ...paths, startFromDump: true });
+  } catch (e) {
+    error = e;
+  }
+  expect(error).toBeInstanceOf(DumpError);
+  expect(error.file).toBe(paths.dumpFile);
+  // The database was closed and not changed: without the request it opens and reads the old board.
+  expect(nameAfterOpen()).toBe("Old");
+});
