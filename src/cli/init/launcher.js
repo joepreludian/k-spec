@@ -1,3 +1,7 @@
+/** How a project's board is started: by its own compose file, or as part of the project's. */
+export const START_SEPARATE = "docker compose -f .k-spec/compose.yaml up -d";
+export const START_INCLUDED = "docker compose up -d k-spec";
+
 /**
  * `.k-spec/k-spec`: the k-spec command of one project, as a POSIX sh script. Every call is one
  * container of the pinned image that is removed when the command ends. It reaches the board
@@ -8,8 +12,13 @@
  * `image`, `slug` and `projectId` are written as single-quoted shell words, so none of them may
  * hold a quote: `init` checks the image name, and takes an id and a slug only in the form it
  * generates itself (`readComposeHeader`), also when they come from a committed file.
+ *
+ * `start` is the command that starts this project's board, one of the two above. Its `START`
+ * line is the one place in a project that says which: the launcher's messages and the k-spec
+ * plugin's skills take it from there.
  */
-export function renderLauncher({ image, slug, projectId }) {
+export function renderLauncher({ image, slug, projectId, start = START_SEPARATE }) {
+  if (start !== START_SEPARATE && start !== START_INCLUDED) throw new Error("the launcher's start command must be one of the two init knows");
   return `#!/bin/sh
 # Written by \`k-spec init\` and rewritten every time it runs: do not edit.
 # The k-spec command for this project's board. Each call runs once in a container of the image
@@ -19,7 +28,7 @@ set -eu
 IMAGE='${image}'
 BOARD='k-spec-${slug}'
 PROJECT='${projectId}'
-START='docker compose -f .k-spec/compose.yaml up -d'
+START='${start}'
 
 fail() {
   printf 'error: %s\\n' "$1" >&2

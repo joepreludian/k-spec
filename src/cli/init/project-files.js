@@ -65,6 +65,31 @@ networks:
 `;
 }
 
+/** The names Compose looks for a project's compose file under, in its order of preference. */
+export const PROJECT_COMPOSE_FILES = Object.freeze(["compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"]);
+
+const BOARD_PATH = String.raw`(["']?)(?:\./)?\.k-spec/compose\.yaml\1\s*(?:#.*)?$`;
+// `- .k-spec/compose.yaml`, `- path: .k-spec/compose.yaml`, or `path:` on a line of its own in a longer entry.
+const BOARD_ENTRY = new RegExp(String.raw`^\s+(?:-\s*(?:path:\s*)?|path:\s*)` + BOARD_PATH);
+const INCLUDE_KEY = /^include:\s*(?:#.*)?$/;
+
+/**
+ * Whether a project's own compose file runs the board as part of it: an entry for
+ * `.k-spec/compose.yaml` in its top-level `include:` list. The text is read line by line, which
+ * is enough for the block form people (and the k-spec plugin) write; the file is never parsed
+ * as YAML and never written.
+ */
+export function composeIncludesBoard(text) {
+  let inInclude = false;
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/\r$/, "");
+    // A line that starts in the first column (and is not a comment) opens a top-level key.
+    if (/^[^\s#]/.test(line)) inInclude = INCLUDE_KEY.test(line);
+    else if (inInclude && BOARD_ENTRY.test(line)) return true;
+  }
+  return false;
+}
+
 // What init itself generates, and nothing else: the id and the slug are written into a shell
 // script and a YAML file, and the line they are read from may come from someone else's repository.
 const PROJECT_ID = /^[0-9a-f]{16}$/;

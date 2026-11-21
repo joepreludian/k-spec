@@ -496,3 +496,44 @@ test("the next steps say when the dump is there to commit", async () => {
   expect(off.out).toContain(".k-spec/data/k-spec.dump.json");
   expect(off.out).toContain("when the board stops");
 });
+
+const INCLUDES = "include:\n  - .k-spec/compose.yaml\nservices:\n  web:\n    image: nginx\n";
+
+test("a project whose compose file includes the board gets the launcher and the next steps for that", async () => {
+  const f = folder();
+  f.put("docker-compose.yml", INCLUDES);
+  const result = await f.run();
+  expect(result.code).toBe(0);
+  expect(f.text(".k-spec/k-spec")).toContain("START='docker compose up -d k-spec'");
+  expect(result.out.split("\n")[0]).toMatch(/image k-spec:dev, part of docker-compose\.yml\)\.$/);
+  expect(result.out).toContain("Start the board:   docker compose up -d --wait k-spec");
+  expect(result.out).toContain("Access link:       docker compose logs k-spec");
+  expect(result.out).not.toContain("-f .k-spec/compose.yaml");
+  // init looks at the person's compose file and never writes it.
+  expect(f.text("docker-compose.yml")).toBe(INCLUDES);
+});
+
+test("the compose file Compose would use is the one that decides", async () => {
+  const f = folder();
+  f.put("compose.yaml", "services:\n  web:\n    image: nginx\n");
+  f.put("docker-compose.yml", INCLUDES);
+  await f.run();
+  expect(f.text(".k-spec/k-spec")).toContain("START='docker compose -f .k-spec/compose.yaml up -d'");
+});
+
+test("a compose file that does not include the board changes nothing", async () => {
+  const plain = folder();
+  const withCompose = folder();
+  withCompose.put("compose.yaml", "services:\n  web:\n    image: nginx\n");
+  expect((await withCompose.run()).out).toBe((await plain.run()).out);
+  expect(withCompose.text(".k-spec/k-spec")).toBe(plain.text(".k-spec/k-spec"));
+});
+
+test("a renamed board that is part of the project's compose file is moved through that file", async () => {
+  const f = folder();
+  f.put("compose.yaml", INCLUDES);
+  await f.run();
+  const renamed = await f.run(["--name", "Other Name"]);
+  const hint = renamed.out.split("\n").find((line) => line.includes("k-spec-my-app"));
+  expect(hint).toContain("docker compose up -d k-spec");
+});

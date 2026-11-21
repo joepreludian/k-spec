@@ -17,6 +17,7 @@ BOARD="k-spec-smoke-$$"
 ONE="$ROOT/one/$NAME"              # the project
 TWO="$ROOT/two/elsewhere $$"       # a second project, set up while the first holds its port
 TWIN="$ROOT/twin/$NAME"            # a different project that happens to have the same name
+INC="$ROOT/inc/included $$"        # a project with a compose file of its own, which includes the board
 ID=
 WATCH_PID=
 
@@ -37,6 +38,9 @@ cleanup() {
   status=$?
   trap - EXIT INT TERM
   [ -z "$WATCH_PID" ] || kill "$WATCH_PID" 2>/dev/null || true
+  if [ -f "$INC/compose.yaml" ]; then
+    (cd "$INC" && docker compose down --timeout 5 --remove-orphans) >/dev/null 2>&1 || true
+  fi
   for folder in "$TWIN" "$TWO" "$ONE"; do
     if [ -f "$folder/.k-spec/.env" ]; then
       compose "$folder" down --timeout 5 --remove-orphans >/dev/null 2>&1 || true
@@ -104,7 +108,7 @@ watch_stop() {
 }
 
 docker image inspect "$IMAGE" >/dev/null 2>&1 || fail "no such image: $IMAGE (build it first)"
-mkdir -p "$ONE" "$TWO" "$TWIN"
+mkdir -p "$ONE" "$TWO" "$TWIN" "$INC"
 
 # 1. init
 init "$ONE" >"$ROOT/init.out" 2>&1 || {
@@ -271,5 +275,46 @@ compose "$TWO" stop >/dev/null 2>&1 || fail "docker compose stop (saving off)"
 grep -qF '"Kept in the database"' "$TWO/.k-spec/data/k-spec.dump.json" || fail "with saving off, stopping did not write the dump"
 compose "$TWO" down --timeout 5 >/dev/null 2>&1 || fail "docker compose down (saving off)"
 ok "with saving off the dump is written when the board stops, and the database is in the data folder"
+
+# 15. a board that is part of the project's own compose file
+init "$INC" >/dev/null 2>&1 || fail "init in the project that has a compose file"
+cat >"$INC/compose.yaml" <<EOF
+include:
+  - .k-spec/compose.yaml
+services:
+  idle:
+    image: $IMAGE
+    init: true
+    command: ["node", "-e", "setInterval(() => {}, 1e9)"]
+    healthcheck:
+      disable: true
+EOF
+init "$INC" >"$ROOT/init-inc.out" 2>&1 || {
+  cat "$ROOT/init-inc.out" >&2
+  fail "init again, after the board was included"
+}
+grep -qF "part of compose.yaml" "$ROOT/init-inc.out" || fail "init did not see that the board is included: $(head -1 "$ROOT/init-inc.out")"
+grep -qF "START='docker compose up -d k-spec'" "$INC/.k-spec/k-spec" || fail "the launcher of an included board does not name the project's start command"
+(cd "$INC" && docker compose up -d --wait) >"$ROOT/inc-up.out" 2>&1 || {
+  cat "$ROOT/inc-up.out" >&2
+  fail "the project's own docker compose up did not start with the board included"
+}
+"$INC/.k-spec/k-spec" add Backlog "Included" >/dev/null || fail "the launcher of the included board could not add a card"
+grep -qF '"Included"' "$INC/.k-spec/data/k-spec.dump.json" || fail "the included board did not save to its own data folder"
+ok "a board included in the project's compose file starts with it, and its launcher works"
+
+idle=$(cd "$INC" && docker compose ps -q idle)
+[ -n "$idle" ] || fail "the project's own service is not running"
+nets=$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$idle")
+case "$nets" in
+  *k-spec-*) fail "the project's own service was put on the board's network: $nets" ;;
+esac
+ok "the project's own services keep their default network"
+
+(cd "$INC" && docker compose rm -sf k-spec) >/dev/null 2>&1 || fail "removing the included board's container"
+"$INC/.k-spec/k-spec" board >/dev/null 2>"$ROOT/inc.err" && fail "the launcher answered with the included board removed"
+grep -qF "start it with: docker compose up -d k-spec" "$ROOT/inc.err" || fail "the launcher should name the project's start command, got: $(cat "$ROOT/inc.err")"
+(cd "$INC" && docker compose down --timeout 5) >/dev/null 2>&1 || fail "docker compose down in the project with the included board"
+ok "with the board's container removed the launcher names the project's start command"
 
 printf 'smoke test passed: %s\n' "$IMAGE"

@@ -4,8 +4,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  composeIncludesBoard,
   ENV_KEYS,
   mergeEnv,
+  PROJECT_COMPOSE_FILES,
   readComposeHeader,
   readEnv,
   renderCompose,
@@ -283,4 +285,36 @@ test("the board has a network of its own and leaves the default one alone", () =
   expect(text).toContain("\n    networks:\n      - k-spec\n");
   expect(text.endsWith("\nnetworks:\n  k-spec:\n    name: k-spec-my-app\n")).toBe(true);
   expect(text).not.toContain("default:");
+});
+
+test("the project's compose file is looked for under the names Compose uses, in its order", () => {
+  expect(PROJECT_COMPOSE_FILES).toEqual(["compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"]);
+});
+
+test("the board is included when the project's compose file lists it under include", () => {
+  for (const entry of [
+    "- .k-spec/compose.yaml",
+    "- ./.k-spec/compose.yaml",
+    '- ".k-spec/compose.yaml"   # the board',
+    "- path: '.k-spec/compose.yaml'",
+    "- project_directory: .\n    path: .k-spec/compose.yaml",
+  ]) {
+    expect(composeIncludesBoard(`include:\n  - other.yaml\n  ${entry}\nservices:\n  web:\n    image: nginx\n`)).toBe(true);
+  }
+  expect(composeIncludesBoard("services: {}\ninclude: # ours\r\n  - .k-spec/compose.yaml\r\n")).toBe(true);
+});
+
+test("naming the file anywhere else is not including it", () => {
+  for (const text of [
+    "",
+    "services:\n  web:\n    image: nginx\n",
+    "include:\n  # - .k-spec/compose.yaml\n  - other.yaml\n",
+    "include:\n  - other.yaml\nservices:\n  web:\n    env_file:\n      - .k-spec/compose.yaml\n",
+    "include:\n  - .k-spec/compose.yaml.bak\n",
+    "include:\n  - sub/.k-spec/compose.yaml\n",
+    "# include:\n#   - .k-spec/compose.yaml\n",
+    "x-include:\n  - .k-spec/compose.yaml\n",
+  ]) {
+    expect(composeIncludesBoard(text)).toBe(false);
+  }
 });

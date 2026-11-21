@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { renderLauncher } from "./launcher.js";
+import { renderLauncher, START_INCLUDED, START_SEPARATE } from "./launcher.js";
 
 // The launcher is run for real, against stand-ins for `docker` and `git` that write down how
 // they were called (one file per docker subcommand, every argument followed by a NUL byte).
@@ -164,4 +164,21 @@ test("the file says where it comes from, is plain sh, and never asks for a termi
   expect(text).not.toMatch(/\s-t\s|\s-it\s|--tty/);
   expect(text.endsWith("\n")).toBe(true);
   expect(spawnSync("sh", ["-n", launcher]).status).toBe(0);
+});
+
+test("a board that is part of the project's compose file is started through it", () => {
+  fs.writeFileSync(launcher, renderLauncher({ ...PROJECT, start: START_INCLUDED }), { mode: 0o755 });
+  const gone = launch(["board"]);
+  expect(gone.code).toBe(3);
+  expect(gone.err).toContain("start it with: docker compose up -d k-spec)");
+  expect(launch(["board"], MINE).run).toContain("K_SPEC_START_HINT=docker compose up -d k-spec");
+});
+
+test("the start command is one of the two init knows", () => {
+  expect(START_SEPARATE).toBe(START);
+  expect(START_INCLUDED).toBe("docker compose up -d k-spec");
+  expect(renderLauncher(PROJECT)).toBe(renderLauncher({ ...PROJECT, start: START_SEPARATE }));
+  // It is written into the script between single quotes: nothing else may ever get there.
+  expect(() => renderLauncher({ ...PROJECT, start: "rm -rf /" })).toThrow();
+  expect(() => renderLauncher({ ...PROJECT, start: "x'; touch INJECTED; : '" })).toThrow();
 });

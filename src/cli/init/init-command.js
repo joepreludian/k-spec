@@ -2,10 +2,12 @@ import path from "node:path";
 import { Refused, UsageError } from "../errors.js";
 import { oneLine } from "../render.js";
 import { choosePort, PORT_FIRST, PORT_LAST } from "./choose-port.js";
-import { renderLauncher } from "./launcher.js";
+import { renderLauncher, START_INCLUDED, START_SEPARATE } from "./launcher.js";
 import {
+  composeIncludesBoard,
   ENV_KEYS,
   mergeEnv,
+  PROJECT_COMPOSE_FILES,
   readComposeHeader,
   readEnv,
   renderCompose,
@@ -111,6 +113,13 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
     );
   }
 
+  // The project's own compose file may run the board as part of it (an `include` entry, which
+  // the person or the k-spec plugin wrote). init only looks: it decides how the board is started.
+  const projectCompose = PROJECT_COMPOSE_FILES.find((file) => readFile(path.join(cwd, file)) !== null) ?? null;
+  const included = projectCompose !== null && composeIncludesBoard(readFile(path.join(cwd, projectCompose)));
+  const start = included ? START_INCLUDED : START_SEPARATE;
+  const logs = included ? "docker compose logs k-spec" : "docker compose -f .k-spec/compose.yaml logs k-spec";
+
   const name = projectName(values.name ?? known?.name ?? path.basename(cwd));
   const projectId = known?.id ?? hex(local.randomBytes(8));
   const renamed = known !== null && name !== known.name;
@@ -147,7 +156,7 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
   write(files.gitignore, renderGitignore());
   write(files.settings, mergeEnv(settingsText, changes), 0o600);
   write(files.compose, renderCompose({ image, name, slug, projectId, autoDump }));
-  write(files.launcher, renderLauncher({ image, slug, projectId }), 0o755);
+  write(files.launcher, renderLauncher({ image, slug, projectId, start }), 0o755);
 
   // In k-spec's own repository the skill folder is a link to the skill's source: never write through it.
   const skillDir = path.join(cwd, ".claude", "skills", "k-spec");
@@ -160,10 +169,10 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
   const toCommit = [".k-spec/compose.yaml", ".k-spec/k-spec", ".k-spec/.gitignore", ...(skillLinked ? [] : [".claude/skills/k-spec/SKILL.md"])];
   out(
     [
-      `k-spec is set up for "${oneLine(name)}" (board k-spec-${slug}, port ${port ?? stored[ENV_KEYS.port]}, image ${image}).`,
+      `k-spec is set up for "${oneLine(name)}" (board k-spec-${slug}, port ${port ?? stored[ENV_KEYS.port]}, image ${image}${included ? `, part of ${projectCompose}` : ""}).`,
       "",
-      "Start the board:   docker compose -f .k-spec/compose.yaml up -d --wait",
-      "Access link:       docker compose -f .k-spec/compose.yaml logs k-spec",
+      `Start the board:   ${start.replace(" up -d", " up -d --wait")}`,
+      `Access link:       ${logs}`,
       `Commit:            ${toCommit.join(" ")}`,
       autoDump
         ? "                   and .k-spec/data/k-spec.dump.json, there as soon as the board has started"
@@ -171,7 +180,7 @@ async function init({ env, cwd, readFile, local, out }, { values }) {
       ...(skillLinked ? ["", "Skill not written: .claude/skills/k-spec is a link."] : []),
       ...(movedFrom === null
         ? []
-        : ["", `The board's container was ${movedFrom} until now. To move it to k-spec-${slug}: stop any running watch, then docker compose -f .k-spec/compose.yaml up -d`]),
+        : ["", `The board's container was ${movedFrom} until now. To move it to k-spec-${slug}: stop any running watch, then ${start}`]),
     ].join("\n"),
   );
 }
