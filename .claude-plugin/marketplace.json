@@ -1,0 +1,12 @@
+{
+  "name": "k-spec",
+  "owner": { "name": "Jon Trigueiro" },
+  "description": "k-spec: a kanban board per project for handing work to AI agents.",
+  "plugins": [
+    {
+      "name": "k-spec",
+      "source": "./plugin",
+      "description": "Set a project's k-spec board up, start it for a task and stop it. The board runs in Docker and is saved in the project's git."
+    }
+  ]
+}

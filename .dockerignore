@@ -13,3 +13,5 @@ docs/specs
 .claude
 *.log
 .DS_Store
+plugin
+.claude-plugin
