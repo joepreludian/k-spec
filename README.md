@@ -2,13 +2,23 @@
 
 A Trello-style kanban board built for working with AI agents. You hand work to agents as cards and talk to them on the card: the description is the spec, checklists define "done", comments are the back-and-forth, and an agent status tag (idle, working, waiting for input, blocked) shows where each card stands. The board's state lives in a SQLite database owned by the application. You change it in the web UI; the `k-spec` command line gives an agent (or you, in a terminal) the same board; an MCP server comes next.
 
-**Current slice:** k-spec ships as a Docker image, one board per project, set up with `k-spec init` (see "Install in a project"). Inside it: the web UI and the `k-spec` command line on a SQLite store, behind a token-link access gate. Cards have sequential `#n` numbers; tiles show labels, where a card is being worked (lima instance, worktree or host, plus the branch), an animated status dot for cards waiting for input or blocked, and one progress segment per checklist. Opening a card shows four tabs: Overview (execution summary, description, checklists), Spec (linked markdown files rendered in place), Execution (location, branch, Claude session, tokens, history) and Activity (comments and status changes). The top bar names the project, carries its links, and opens the README in a side sheet. Every edit is saved on the server. Execution data in the sample board is seeded; the CLI's `start`, `end` and `publish` write it for real.
+**Current slice:** k-spec ships as a Docker image, one board per project, set up with `k-spec init` or, in Claude Code, with the plugin's `/k-spec:setup` (see "Install in a project"). The board is written to a file in the project after every change, which is what puts it in git, and a session asked to work "using k-spec" tracks its task on a card. Inside it: the web UI and the `k-spec` command line on a SQLite store, behind a token-link access gate. Cards have sequential `#n` numbers; tiles show labels, where a card is being worked (lima instance, worktree or host, plus the branch), an animated status dot for cards waiting for input or blocked, and one progress segment per checklist. Opening a card shows four tabs: Overview (execution summary, description, checklists), Spec (linked markdown files rendered in place), Execution (location, branch, Claude session, tokens, history) and Activity (comments and status changes). The top bar names the project, carries its links, and opens the README in a side sheet. Every edit is saved on the server. Execution data in the sample board is seeded; the CLI's `start`, `end` and `publish` write it for real.
 
 ## Install in a project
 
-k-spec runs as one Docker container per project. Each project gets its own board, its own port and its own `k-spec` command, and nothing is installed on the machine besides the image. You need Docker with Compose (Docker Engine on Linux, or Docker Desktop).
+k-spec runs as one Docker container per project. Each project gets its own board, its own port and its own `k-spec` command, and nothing is installed on the machine besides the image. You need Docker with Compose 2.20 or newer (Docker Engine on Linux, or Docker Desktop).
 
-In the project's folder:
+**With Claude Code.** Add the plugin once, then run its setup in the project:
+
+```
+/plugin marketplace add joepreludian/k-spec
+/plugin install k-spec@k-spec
+/k-spec:setup
+```
+
+`/k-spec:setup` says what it is about to write, asks, sets the project up, starts the board and hands you the access link. In a project that already has a board it sets a fresh clone's machine up, or offers the update to the newest release. The plugin has two more commands: `/k-spec:use` starts the board when it is not running and has the task at hand tracked on it (see "Working a task on the board"), and `/k-spec:stop` stops it.
+
+**By hand.** In the project's folder:
 
 ```bash
 docker run --rm --network host -u "$(id -u):$(id -g)" -v "$PWD:$PWD" -w "$PWD" \
@@ -35,9 +45,9 @@ Open the link once. It sets a cookie and you land on an empty board named after 
 | `.k-spec/k-spec` | The launcher: the `k-spec` command for this project's board | yes |
 | `.k-spec/.gitignore` | Keeps the three entries below marked "no" out of git, and the dump in it even if the project ignores folders called `data` | yes |
 | `.claude/skills/k-spec/SKILL.md` | The skill that tells Claude Code how to use the board | yes |
-| `.k-spec/data/k-spec.dump.json` | The board, as the application writes it (see "The board in git") | yes |
+| `.k-spec/data/k-spec.dump.json` | The board, written by the application after every change (see "The board in git") | yes |
 | `.k-spec/.env` | This machine's token, port, host name and owner | no |
-| `.k-spec/data/k-spec.db*` | The database | no |
+| `.k-spec/data/k-spec.db*` | The database, only in a project that turned saving on every change off | no |
 | `.k-spec/data/k-spec.server.json` | The running server's note for the launcher | no |
 
 The generated files are rewritten each time `init` runs, so do not edit them; `.env` is where a machine's settings live.
@@ -60,12 +70,25 @@ Every call runs once in a short-lived container next to the board (about a third
 | `--name <name>` | The project's name: the board's title when the board is first created, and (lower-cased, as `k-spec-<name>`) the name of its container. Passed later, it renames the container only; the board keeps its title | the folder's name |
 | `--port <n>` | The port the board is published on | a free one between 14201 and 14299, picked at random |
 | `--host <name>` | The host name in the printed access link, for a VM or LAN name | `localhost` |
+| `--no-auto-dump`, `--auto-dump` | Turn saving the board on every change off, or on again (see "The board in git"). It is kept in the committed compose file, so it holds for every clone | on |
+
+**As part of the project's own compose file.** A project that has a compose file in its root (`compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml`) can run the board as one of its services. Add this entry to that file, then run `init` again:
+
+```yaml
+include:
+  - .k-spec/compose.yaml
+```
+
+`docker compose up -d` in the project now starts the board with everything else. The board's own commands become `docker compose up -d k-spec` and `docker compose logs k-spec` (the access link), and the launcher names the first when the board is not running. `init` never edits your compose file. It only looks for that entry, written in block form as above, and writes the launcher to match, which is why it has to run again after you add or remove the entry. `/k-spec:setup` offers to do both. Two things to know:
+
+- Everyone who runs the project's compose then needs k-spec set up on their machine first. Without `.k-spec/.env`, every `docker compose` command in the project stops with "this machine has no settings yet - run k-spec init in this project".
+- The board runs under the project's own compose project name, like the project's other services (see the note on same-named projects below).
 
 **Several projects on one machine.** Run the same three commands in each project. Every `init` picks a port nobody is listening on, so the boards do not collide and can all be open in one browser.
 
 - `--network host` in the first command is what lets `init` see which ports are in use. Without it the port is still picked at random from the range, but not checked.
 - A stopped board does not hold its port, so a project set up later can be given the same one. Then the board that starts second fails with Docker's "port is already allocated". Run `init --port <n>` there (the full `docker run … k-spec init --port <n>`), and `up -d` again.
-- Two projects whose folders have the same name cannot both run: the second fails to start with "container name is already in use" and the first is not touched. Give one of them a name: `init --name "Another name"`.
+- Two projects whose folders have the same name cannot both run: the second fails to start with "container name is already in use" and the first is not touched. Give one of them a name: `init --name "Another name"`. This guard is for a board with its own compose file. A board that is part of the project's compose file follows Compose's rule for that project: two different projects in folders of the same name share one compose project, and starting one replaces the other's containers, the board's included. The launcher still refuses a board that is not its own project's.
 - To rename a project whose board is running: stop any `watch` first (it holds the old network, and the move stops half way with the board down), run `init --name "New name"`, then `up -d`.
 - A second clone or a git worktree of a project on the same machine uses the first one's board: the launcher is committed and finds the board by its name.
 - On Docker Desktop, "the host's network" is that of Docker's own virtual machine. What the port check sees there has not been tried.
@@ -79,14 +102,19 @@ docker run --rm --network host -u "$(id -u):$(id -g)" -v "$PWD:$PWD" -w "$PWD" \
 docker compose -f .k-spec/compose.yaml up -d
 ```
 
-The project keeps its token, port, name and board; the compose file, the launcher and the skill are brought to the new version, and `init`'s first line says which. Commit the changed files. There is no way back to an older version.
+The project keeps its token, port, name and board; the compose file, the launcher and the skill are brought to the new version, and `init`'s first line says which. Commit the changed files. There is no way back to an older version. For a board that is part of the project's compose file the last command is `docker compose up -d k-spec`. A board set up from a local build made before saving on every change existed needs `docker compose -f .k-spec/compose.yaml down` once before the update, because the board's network is declared differently now.
 
-**The board in git.** The database is not committed; a JSON dump of the board is. The server writes it when the board stops (`docker compose … stop`, `down`, a restart, a shutdown of the machine), not after every change, so write it yourself before committing the board:
+**The board in git.** The board is one file, `.k-spec/data/k-spec.dump.json`, and the server writes it after every change. Commit it when you want the board's state in git. The database behind the board is a cache inside the container: every start reads the board from that file, so the container can be removed and the board is still there.
 
-```bash
-docker compose -f .k-spec/compose.yaml exec k-spec npm run db:dump   # the board -> .k-spec/data/k-spec.dump.json
-docker compose -f .k-spec/compose.yaml exec k-spec npm run db:load   # the dump -> the board, after pulling a newer one
-```
+- **After a pull or a branch switch that changed the file**, restart the board (`docker compose -f .k-spec/compose.yaml restart`) or load the file into the running board, before you change anything on the board:
+
+  ```bash
+  docker compose -f .k-spec/compose.yaml exec k-spec npm run db:load
+  ```
+
+  A running board does not notice the file changing under it, and its next change would overwrite it (git still has the version that was replaced). Stopping or restarting never rewrites the file.
+- **A merge conflict in the file** keeps the board from starting, with the file named, until the file is valid again. Take one side (`git checkout --ours` or `--theirs`); do not edit the file by hand.
+- **To turn saving on every change off**, run `init` with `--no-auto-dump`. The database then lives in `.k-spec/data/` and is the board between two stops. The file is written when the board stops (`stop`, `down`, a restart, a shutdown of the machine) and by `docker compose -f .k-spec/compose.yaml exec k-spec npm run db:dump`, and a board that has a database does not read the file (run `npm run db:load` the same way after pulling a newer one). `--auto-dump` turns saving back on. Turning it off in a project that had it on is refused while an old `.k-spec/data/k-spec.db` is there: that file is from before and would be used instead of the board's file.
 
 On another machine, clone the project and set that machine up from the version the project is pinned to, so that the committed files do not change:
 
@@ -96,7 +124,7 @@ docker run --rm --network host -u "$(id -u):$(id -g)" -v "$PWD:$PWD" -w "$PWD" \
 docker compose -f .k-spec/compose.yaml up -d --wait
 ```
 
-`init` keeps the project's name and identity from the committed files and gives that machine its own token and port, and a board with an empty database starts from the committed dump. It refuses a `.k-spec/compose.yaml` it did not write. Do not edit the dump by hand.
+`init` keeps the project's name and identity from the committed files and gives that machine its own token and port, and the board starts from the committed dump. It refuses a `.k-spec/compose.yaml` it did not write. Do not edit the dump by hand.
 
 **A board on another machine.** The launcher only talks to its own project's board. For any other board, give the address and token yourself:
 
@@ -134,14 +162,14 @@ Open that link once; it sets a cookie and you land on the board. Anyone hitting 
 
 ## Where the board is stored
 
-The board is saved in a SQLite file (`data/k-spec.db` by default, set `K_SPEC_DB` to move it). That file is git-ignored. What you commit is a dump the application writes: `data/k-spec.dump.json` (`K_SPEC_DUMP` to move it).
+What you commit is a dump the application writes, `data/k-spec.dump.json` (`K_SPEC_DUMP` to move it). The server writes it after every change. The board is also kept in a SQLite file (`data/k-spec.db` by default, `K_SPEC_DB` to move it, git-ignored), which is a cache: on every start the server reads the board from the dump when there is one, and starts from a sample board when there is not. A dump that cannot be read stops the start, with the file named. Stopping the server does not rewrite the dump (unless an earlier write had failed), so a dump you pulled while the server ran is what the next start shows.
 
 ```bash
 npm run db:dump   # write the current board to the dump file
-npm run db:load   # replace the current board with the dump file
+npm run db:load   # replace the current board with the dump file, also while the server runs
 ```
 
-The dump is also written when the server stops. On start, a project with no SQLite file imports the dump (or starts from a sample board when there is no dump); a project that already has a SQLite file keeps it and does not read the dump, so run `npm run db:load` after pulling a newer one. Do not edit the dump by hand.
+`K_SPEC_AUTO_DUMP=off npm run dev` brings the earlier behaviour back: the dump is written when the server stops and on demand, and a database that has a board keeps it and never reads the dump (run `npm run db:load` after pulling a newer one). Do not edit the dump by hand.
 
 ## Command line
 
@@ -163,7 +191,8 @@ The examples below write `k-spec`; in a project that is `.k-spec/k-spec`.
 | `k-spec comment <n> <text> [--agent <name>] [--request]` | Add a comment (`-` reads stdin); `--request` sends it to the agent |
 | `k-spec status <n> <status>` | `idle`, `working`, `waiting` (short for `waiting-for-input`), `blocked` |
 | `k-spec move <n> <lane> [--top]` | Move to the end of a lane, or its top |
-| `k-spec check <n> <item>` / `uncheck` | Tick an item by the number `show` prints, e.g. `1.2` |
+| `k-spec check <n> <item>` / `uncheck` | Tick an item by the number `show` prints (`1.2`), or by its checklist's title and its number in it (`Plan.3`) |
+| `k-spec checklist <n> <title> [<item>...]` | Add a checklist with its items (a single `-` reads the items from stdin, one per line) |
 | `k-spec add <lane> <title> [--description <text>]` | Create a card; prints its number |
 | `k-spec delete <n>` | Delete a card, without asking |
 | `k-spec start <n> [--branch <b>] [--location <kind>:<name>] [--worktree <path>]` | Start work (default: current git branch, `host:<this machine>`) |
@@ -171,7 +200,7 @@ The examples below write `k-spec`; in a project that is `.k-spec/k-spec`.
 | `k-spec link <n> <path> [<title>]` | Attach a markdown file of the project to the card (shown in its Spec tab) |
 | `k-spec publish <n> <title> <url>` / `unpublish <n> <title>` | Services on the active work |
 | `k-spec run <command> [<json>]` | Any other command, with raw ids (`k-spec show <n> --json` prints them) |
-| `k-spec init [--name <name>] [--port <n>] [--host <name>]` | Set a folder up as a k-spec project; run from the image (see "Install in a project"), needs no server |
+| `k-spec init [--name <name>] [--port <n>] [--host <name>] [--no-auto-dump]` | Set a folder up as a k-spec project; run from the image (see "Install in a project"), needs no server |
 
 `<n>` is the card's number, with or without `#`. Lanes and services are named by their whole name, ignoring case. Add `--json` to any command for JSON instead of text. Text that starts with a dash goes after `--`: `k-spec comment 4 -- "-1 from me"`.
 
@@ -229,7 +258,27 @@ The line carries the first 200 characters; the agent reads the rest with `k-spec
 
 To make a project's sessions watch from the start, say so in that project's `CLAUDE.md`.
 
+The k-spec plugin (`plugin/` in this repository; see "Install in a project") adds `/k-spec:setup`, `/k-spec:use` and `/k-spec:stop`. They set a board up, start it and stop it, and leave everything that is done on the board to this skill.
+
 **What the access link is worth.** Whoever can write on the board can now give instructions to an agent that is watching it. Share the token link as you would share access to that agent.
+
+## Working a task on the board
+
+Say "using k-spec" when you ask a Claude Code session for a piece of work, or type `/k-spec:use`, and the session keeps the board up to date while it works. With the superpowers skills (brainstorming, writing-plans, executing-plans) that is:
+
+| When | On the board |
+|---|---|
+| The task is understood | A card in Backlog, with what is wanted and why |
+| A design or a plan is written | The file is attached to the card and shows in its Spec tab |
+| The build starts | A checklist `Plan` with one item per task of the plan; the card moves to In Progress, status `working` |
+| A task of the plan is committed | Its item is ticked |
+| The build and its review are finished | The card moves to Done, status `idle` |
+
+The board steps are written into the plan itself, as steps of its tasks. That way they survive a long session and reach a subagent that sees one task only. In a new session, "resume on k-spec" picks a card up at its first unticked item.
+
+This happens only when you ask. In a project that has a board, a session may offer it once for a new task and say what it would do; a no stands for the session. The board never holds the work up: if it is not running, the session says so once and goes on. The session does not commit the board's file. That stays yours.
+
+The rules are a section of the skill (`skills/k-spec/SKILL.md`), so they travel with the image a project is pinned to.
 
 ## Viewing project files
 
@@ -253,18 +302,18 @@ docker build --build-arg K_SPEC_IMAGE=k-spec:dev -t k-spec:dev .
 sh scripts/smoke.sh k-spec:dev
 ```
 
-`K_SPEC_IMAGE` must be the name the image is tagged with: `init` writes it into the files of the projects it sets up, which is how a project stays on the version that set it up. The smoke script sets a scratch project up from the image, starts its board and drives it through the launcher (a card, a request, `watch`, a stop and start, the dump, a port in use, a second project with the same name), then removes everything. To try the image in a real project, use `k-spec:dev` in place of the published name in the `init` command. `K_SPEC_IMAGE=k-spec:dev npx k-spec init` runs `init` from source.
+`K_SPEC_IMAGE` must be the name the image is tagged with: `init` writes it into the files of the projects it sets up, which is how a project stays on the version that set it up. The smoke script sets a scratch project up from the image, starts its board and drives it through the launcher (a card, a request, `watch`, a stop and start, the dump after every change and after a restart, a port in use, a second project with the same name, a project with saving off, a board included in a project's own compose file), then removes everything. To try the image in a real project, use `k-spec:dev` in place of the published name in the `init` command. `K_SPEC_IMAGE=k-spec:dev npx k-spec init` runs `init` from source. To try the plugin from a checkout, start Claude Code with `claude --plugin-dir /path/to/k-spec/plugin`; `/k-spec:setup k-spec:dev` then sets a project up from the image you built.
 
 ## Releasing
 
-1. Set the new version: `npm version <x.y.z> --no-git-tag-version`, and commit.
+1. Set the new version: `npm version <x.y.z> --no-git-tag-version`, write the same version into `plugin/.claude-plugin/plugin.json` (a test fails when the two differ), and commit.
 2. Tag that commit `v<x.y.z>` and push the tag.
 
 The Release workflow (`.github/workflows/release.yml`) fails if the tag is not the version in `package.json`, runs the same checks as every pull request (`.github/workflows/ci.yml`: lint, tests, build, then the image and its smoke script), and publishes `docker.io/joepreludian/k-spec` for amd64 and arm64 under three tags: `<x.y.z>`, `<x.y>` and `latest`. Nothing is published without a version tag. The repository needs two secrets, `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub access token that may write).
 
 ## Layout
 
-Domain-driven, in layers under `src/`: `domain` (pure data and rules), `application` (use cases and the command registry), `infrastructure` (SQLite store, seed, access token, HTTP client), `ui` (React components and the board context store), `cli` (the `k-spec` command; its executable is `bin/k-spec.mjs`; `cli/init/` holds `init` and the files it writes into a project), `app` (Next.js entry). At the root: the `Dockerfile`, `scripts/smoke.sh` (the image's test), `skills/k-spec/` (the skill) and `.github/workflows/`. See `CLAUDE.md` for the layer rules and conventions.
+Domain-driven, in layers under `src/`: `domain` (pure data and rules), `application` (use cases and the command registry), `infrastructure` (SQLite store, seed, access token, HTTP client), `ui` (React components and the board context store), `cli` (the `k-spec` command; its executable is `bin/k-spec.mjs`; `cli/init/` holds `init` and the files it writes into a project), `app` (Next.js entry). At the root: the `Dockerfile`, `scripts/smoke.sh` (the image's test), `skills/k-spec/` (the skill), `plugin/` (the Claude Code plugin: the `setup`, `use` and `stop` skills), `.claude-plugin/marketplace.json` (what `/plugin marketplace add` reads) and `.github/workflows/`. See `CLAUDE.md` for the layer rules and conventions.
 
 ## Roadmap
 
@@ -272,7 +321,8 @@ Domain-driven, in layers under `src/`: `domain` (pure data and rules), `applicat
 2. **SQLite store**: commands run on the server and are saved; JSON dump and load for git. *(done)*
 3. **CLI**: `k-spec`, a client of the server, the agent's view of the board. *(done)*
 4. **Requests to the agent**: "Send to agent" in the browser, `k-spec watch`, and the Claude skill. *(done)*
-5. **Distribution**: one Docker image, a board per project set up with `k-spec init`, a launcher per project, CI and releases. *(this slice)*
-6. **Working agreement on the board**: spec file, approval, the plan as checklists, review, driven through requests.
+5. **Distribution**: one Docker image, a board per project set up with `k-spec init`, a launcher per project, CI and releases. *(done)*
+6. **The board in git, the plugin, tasks on the board**: the dump follows every change, a Claude Code plugin sets a board up and runs it, and a task built with the superpowers skills is tracked on its card. *(this slice)*
+7. **Working agreement on the board**: approval and review on the card, driven through requests.
 7. **MCP server**: the same commands as tools, so Claude manages cards without touching files.
 8. **Card documents**: where a card's spec markdown lives and how agents attach it.
