@@ -1,8 +1,8 @@
 # A version tag (v<major>.<minor>.<patch>) publishes the image to Docker Hub, for amd64 and
 # arm64, after the same checks every change gets. Nothing else publishes.
 #
-# Needs two repository secrets: DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (an access token that
-# may write to the repository below).
+# Needs, in the repository's Actions settings, the variable DOCKERHUB_USERNAME and the secret
+# DOCKERHUB_TOKEN (an access token that may write to the repository below).
 name: Release
 
 on:
@@ -50,7 +50,7 @@ jobs:
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - id: meta
         uses: docker/metadata-action@v6

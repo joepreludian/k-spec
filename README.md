@@ -310,7 +310,7 @@ sh scripts/smoke.sh k-spec:dev
 1. Set the new version: `npm version <x.y.z> --no-git-tag-version`, write the same version into `plugin/.claude-plugin/plugin.json` (a test fails when the two differ), and commit.
 2. Tag that commit `v<x.y.z>` and push the tag.
 
-The Release workflow (`.github/workflows/release.yml`) fails if the tag is not the version in `package.json`, runs the same checks as every pull request (`.github/workflows/ci.yml`: lint, tests, build, then the image and its smoke script), and publishes `docker.io/joepreludian/k-spec` for amd64 and arm64 under three tags: `<x.y.z>`, `<x.y>` and `latest`. Nothing is published without a version tag. The repository needs two secrets, `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub access token that may write).
+The Release workflow (`.github/workflows/release.yml`) fails if the tag is not the version in `package.json`, runs the same checks as every pull request (`.github/workflows/ci.yml`: lint, tests, build, then the image and its smoke script), and publishes `docker.io/joepreludian/k-spec` for amd64 and arm64 under three tags: `<x.y.z>`, `<x.y>` and `latest`. Nothing is published without a version tag. The repository needs a variable, `DOCKERHUB_USERNAME`, and a secret, `DOCKERHUB_TOKEN` (a Docker Hub access token that may write).
 
 ## Layout
 
