@@ -1,5 +1,6 @@
 // @vitest-environment node
 import fs from "node:fs";
+import { frontMatter } from "@/test/front-matter.js";
 import { renderProjectSkill } from "./init/project-files.js";
 import { COMMAND_HANDLERS } from "./main.js";
 
@@ -117,4 +118,50 @@ test("the older rules agree with the workflow", () => {
   expect(text.replace(/\s+/g, " ")).toMatch(/move it to another lane unless the user asked/);
   expect(text).toMatch(/do not try to start, restart or stop/);
   for (const skill of ["/k-spec:use", "/k-spec:stop"]) expect(text).toContain(skill);
+});
+
+test("the description reaches the model whole: YAML does not cut it at a #", () => {
+  const text = fs.readFileSync(FILE, "utf8");
+  const { description } = frontMatter(text);
+  for (const trigger of ['"k-spec #12"', "watch the board", "using k-spec", "track this on the board", "resume on k-spec", '"request #"', "new piece of work"]) {
+    expect(description).toContain(trigger);
+  }
+  // The copy a project gets carries the same description.
+  expect(frontMatter(renderProjectSkill(text)).description).toBe(description);
+});
+
+const workflow = () => {
+  const text = fs.readFileSync(FILE, "utf8");
+  const at = text.indexOf("\n## Working a task on the board\n");
+  return text.slice(at, text.indexOf("\n## ", at + 1));
+};
+
+test("the offer is the one thing done unasked, and it comes before the rule that shuts the rest", () => {
+  const prose = workflow().replace(/\s+/g, " ");
+  expect(prose).toMatch(/the one thing here you do unasked/i);
+  expect(prose.search(/offer once/i)).toBeGreaterThan(0);
+  expect(prose.search(/offer once/i)).toBeLessThan(prose.search(/applies only after the user asked/i));
+});
+
+test("the steps a plan carries include leaving the board's file out of commits", () => {
+  // The block goes into the plan and is all a subagent with one task sees.
+  const [, block] = workflow().match(/```\n(\s*Card: k-spec #<n>\.[\s\S]*?)```/) ?? [];
+  expect(block).toBeDefined();
+  const carried = block.replace(/\s+/g, " ");
+  for (const phrase of [/never blocks the build/i, /never stage the board's file/i, /stage files by name/i, /from the root of the checkout/i]) {
+    expect(carried).toMatch(phrase);
+  }
+});
+
+test("resuming covers no card, several cards, and a first step that was already done", () => {
+  const prose = workflow().replace(/\s+/g, " ");
+  for (const phrase of [/no card there/i, /several cards/i, /already has a `Plan` checklist/i, /do not run it again/i]) {
+    expect(prose).toMatch(phrase);
+  }
+});
+
+test("the card is made once the user has answered, and a document's commit is the project's business", () => {
+  const prose = workflow().replace(/\s+/g, " ");
+  expect(prose).toMatch(/the user has answered/i);
+  expect(prose).toMatch(/whether a document is committed/i);
 });

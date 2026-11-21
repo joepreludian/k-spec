@@ -26,9 +26,10 @@ server.)
    is one service of the project's own compose file: the other services are the user's and
    stay as they are. The container is kept, so the board starts again quickly.
 
-3. **Look at the board's file.** Run `git status --short .k-spec/data/k-spec.dump.json`. If it
-   prints the file, the board has changes that are not committed. Tell the user, and give them
-   the way to commit it: `git add .k-spec/data/k-spec.dump.json`, then a commit. Commit nothing
-   unless the user asks.
+3. **Look at the board's file.** In that same checkout (it is the one the board writes to),
+   run `git status --short .k-spec/data/k-spec.dump.json`. If it prints the file, the board
+   has changes that are not committed. Tell the user, and give them the way to commit it
+   there: `git add .k-spec/data/k-spec.dump.json`, then a commit. Commit nothing unless the
+   user asks.
 
 4. **Say what happened:** the board is stopped, and `/k-spec:use` starts it again.

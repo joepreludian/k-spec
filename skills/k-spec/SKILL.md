@@ -1,6 +1,6 @@
 ---
 name: k-spec
-description: Use when the user names a k-spec card or board ("k-spec #12", "card #12", "watch the board"), says "using k-spec", "use k-spec for this", "track this on the board" or "resume on k-spec", when a line starting with "request #" or "k-spec:" arrives from a k-spec watch monitor, when the user asks for a new piece of work in a project that has a k-spec board, or when work should be read from or recorded on the board.
+description: 'Use when the user names a k-spec card or board ("k-spec #12", "card #12", "watch the board"), says "using k-spec", "use k-spec for this", "track this on the board" or "resume on k-spec", when a line starting with "request #" or "k-spec:" arrives from a k-spec watch monitor, when the user asks for a new piece of work in a project that has a k-spec board, or when work should be read from or recorded on the board.'
 ---
 
 # k-spec: working with the board
@@ -119,12 +119,12 @@ Rules that are easy to get wrong:
 
 ## Working a task on the board
 
-This section applies only after the user asked for it in this session: they said "using k-spec"
-(or "use k-spec for this", "track this on the board", "resume on k-spec"), typed `/k-spec:use`,
-or said yes to the offer below. If none of that happened, do none of it.
+Tracking a task on the board is something the user asks for. They ask in one of three ways:
+they say "using k-spec" (or "use k-spec for this", "track this on the board", "resume on
+k-spec"), they type `/k-spec:use`, or they say yes to the offer.
 
-**The offer.** When the user asks for a new piece of work in a project that has a board and has
-not mentioned k-spec, offer once, and wait for the answer:
+**The offer** is the one thing here you do unasked. When the user asks for a new piece of work
+in a project that has a board, and has not mentioned k-spec, offer once and wait for the answer:
 
 > This project has a k-spec board. Want this task tracked there? I would create a card for it,
 > attach the design and the plan as they are written, add a checklist made from the plan and
@@ -132,33 +132,41 @@ not mentioned k-spec, offer once, and wait for the answer:
 
 A no stands for the rest of the session: do not offer again.
 
+**Everything below applies only after the user asked**, in one of those three ways. Without
+that, do none of it.
+
 Once asked, say in a line or two what you will do on the board, then follow the table. Its
 moments are the stages of the superpowers skills (brainstorming, writing-plans,
 executing-plans); without those skills, use the same moments of your own work.
 
 | When | On the board |
 |---|---|
-| The task has been stated back to the user (after the first brainstorming message) | `k-spec add Backlog "<title>" --description -`, with a few lines on stdin: what is wanted and why. Tell the user the card's number. If the user named a card ("using k-spec #12"), use that card and create none. |
-| You write a document for the task (design, plan, notes) | Put the line "Card: k-spec #<n>" near its top. As soon as the file exists: `k-spec link <n> <path> "Design"` (or "Plan", or what it is). Only markdown inside the project folder can be attached; say so when you skip a file. |
+| The user has answered your restatement of the task (their reply to the first brainstorming message) | `k-spec add Backlog "<title>" --description -`, with a few lines on stdin: what is wanted and why. Tell the user the card's number. If the user named a card ("using k-spec #12"), use that card and create none. |
+| You write a document for the task (design, plan, notes) | Put the line "Card: k-spec #<n>" near its top. As soon as the file exists: `k-spec link <n> <path> "Design"` (or "Plan", or what it is). Only markdown inside the project folder can be attached; say so when you skip a file. Whether a document is committed is the project's rule, not the board's: the link shows the file as it is in the project folder. |
 | You write the plan | Put the board steps into the plan itself (next section). |
-| The build stops for the user | `k-spec status <n> waiting` (a blocker: `blocked`), and `k-spec status <n> working` when it goes on. |
-| The build and its final review are finished | `k-spec move <n> Done`, `k-spec status <n> idle`, `k-spec end <n>`. |
+| During the build, when it stops for the user | `k-spec status <n> waiting` (a blocker: `blocked`), and `k-spec status <n> working` when it goes on. |
+| The build is finished (with the superpowers skills: after the final review and its fixes) | `k-spec move <n> Done`, `k-spec status <n> idle`, `k-spec end <n>`. |
 
 ### The board steps in the plan
 
 A plan is carried out long after it was written, perhaps by a subagent that sees one task and
 nothing else. So the plan carries the board steps, as steps like any other. Add these four:
 
-1. **Under Global Constraints** (at the top, in a plan that has none):
+1. **Under the plan's Global Constraints heading**, or directly under its title when it has
+   none. In a plan, this block is also the "Card:" line every document gets:
 
    ```
-   Card: k-spec #<n>. The board command is <command>. A board command that fails never blocks
-   the build: say so once, go on, and bring the board up to date when it answers again.
+   Card: k-spec #<n>. The board command is <command>, run from the root of the checkout.
+   A board command that fails never blocks the build: say so once, go on, and bring the
+   board up to date when it answers again. Never stage the board's file (<dump>) in a
+   commit: stage files by name.
    ```
 
    `<command>` is the `k-spec` command of the checkout the build runs in. If that checkout has
    none (a git worktree made before `.k-spec/` was committed), write the main checkout's
-   launcher with its full path: it works from any folder.
+   launcher with its full path: it works from any folder. `<dump>` is
+   `.k-spec/data/k-spec.dump.json` in a project set up with `k-spec init`, and
+   `data/k-spec.dump.json` where k-spec runs from source.
 
 2. **As the first step of Task 1**, one line per task, numbered as in the plan:
 
@@ -176,8 +184,8 @@ nothing else. So the plan carries the board steps, as steps like any other. Add 
 
 3. **As the last step of every Task N**, after its commit: `k-spec check <n> Plan.<N>`.
 
-4. **After the last task**, once the fixes of the final review are in: the three commands of
-   the table's last row.
+4. **After the last task**, once the build is finished: the three commands of the table's
+   last row.
 
 A task with no written plan gets the same milestones: a `Plan` checklist when there is more
 than one step, `working` and In Progress at the start, a tick per step, Done at the end.
@@ -185,9 +193,15 @@ than one step, `working` and In Progress at the start, a tick per step, Done at 
 ### Resuming
 
 "resume", "continue #12", or a new session: `k-spec board --lane "In Progress"` shows what is
-being worked, and `k-spec show <n> --activity` with the card's links gives the plan. Go on at
-the first unticked item of `Plan`. If the plan's own record says more is done than the board
-shows, tick to catch up.
+being worked.
+
+- No card there: say so, and ask for a task or a card number.
+- Several cards, and the user named none: ask which one.
+
+`k-spec show <n> --activity` and the card's links give the plan. Go on at the first unticked
+item of `Plan`. If the card already has a `Plan` checklist, the first step of Task 1 is done:
+do not run it again. If the plan's own record says more is done than the board shows, tick to
+catch up.
 
 ### Rules of the workflow
 

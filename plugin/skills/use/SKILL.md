@@ -29,11 +29,14 @@ Run `.k-spec/k-spec board`.
   command needs this machine's settings, the file `.k-spec/.env`.
   - This checkout has the file: run the command here, with `--wait` added after `up -d`.
   - It does not: among the folders `git worktree list` prints, find the one that has
-    `.k-spec/.env`, and run the command there.
+    `.k-spec/.env`, and run the command there, with `--wait` the same way.
   - No folder has it: this machine is not set up. Tell the user to type `/k-spec:setup` in the
     main checkout, and stop.
 
-  Then run `.k-spec/k-spec board` again.
+  Then run `.k-spec/k-spec board` again. If it still does not print the board, the board did
+  not come up (a board file that cannot be read stops it, for one). Run the start command
+  with `logs --tail 20 k-spec` in place of `up -d` and what follows it, show the user those
+  last lines, and stop.
 - **Any other `error:` line** (the board belongs to another project, docker not found, token
   rejected): show it to the user, and stop.
 

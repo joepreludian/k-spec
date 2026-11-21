@@ -28,7 +28,7 @@ Check in this order and take the first that fits.
 
 | What you find | Case |
 |---|---|
-| `.k-spec/k-spec board` answers, and this checkout has no `.k-spec/.env` | Nothing to set up: this checkout uses the board of another checkout on this machine. Say so, and stop. |
+| `.k-spec/k-spec` is there, this checkout has no `.k-spec/.env`, and `.k-spec/k-spec board` prints the board or answers `server not running` | The board's container is on this machine and belongs to another checkout. Nothing to set up here. Name the checkout that has `.k-spec/.env` (one of the folders `git worktree list` prints, or another clone), say that setting up and updating are done there, and stop. |
 | `git rev-parse --git-dir` and `git rev-parse --git-common-dir` differ (a git worktree) | Never set up here: the board's data would live in the worktree. Name the main checkout (the first line of `git worktree list`), say to run `/k-spec:setup` there, and stop. |
 | No `.k-spec/compose.yaml` | A new project: step 3. |
 | `.k-spec/compose.yaml`, but no `.k-spec/.env` | A clone on a new machine: step 4. |
@@ -97,20 +97,34 @@ Offer two ways and suggest the first:
    set up on their machine first; until then `docker compose` stops and says so.
 2. **Separate.** The board keeps a start command of its own.
 
-For the first, add this entry to the top-level `include:` list of the project's compose file,
-creating the key at the top of the file when there is none, and change nothing else in it:
+For the first:
 
-```yaml
-include:
-  - .k-spec/compose.yaml
-```
+1. Run `docker compose config --quiet` before you edit anything. If it fails already, the file
+   has a problem of its own: tell the user, and keep the board separate.
+2. If this project's board was started before (`.k-spec/k-spec board` prints the board or
+   answers `server not running`), stop any monitor watching it, then remove its container. The
+   project's compose could not create a container whose name is taken:
 
-Then run `docker compose config --quiet`.
+   ```bash
+   docker compose -f .k-spec/compose.yaml down
+   ```
 
-- **It fails:** take the edit back, tell the user, and keep the board separate.
-- **It passes:** run the `docker run` line of step 3 again. `init` now writes the launcher for
-  a board that is part of the project's compose file, and its first line says "part of" and
-  names the file.
+   That removes the board's own container and network and nothing else. The board's file
+   stays, and the board comes back from it.
+3. Add this entry to the top-level `include:` list of the project's compose file, creating the
+   key at the top of the file when there is none, and change nothing else in it:
+
+   ```yaml
+   include:
+     - .k-spec/compose.yaml
+   ```
+
+4. Run `docker compose config --quiet` again. If it fails now, take the edit back, tell the
+   user, and keep the board separate.
+5. Run the `docker run` line of step 3 again. `init` now writes the launcher for a board that
+   is part of the project's compose file, and its first line says "part of" and names the
+   file. If that line does not say "part of", `init` did not see the entry: take the edit
+   back, run that line once more, tell the user, and keep the board separate.
 
 ## 7. Start the board and hand over the link
 

@@ -1,5 +1,6 @@
 // @vitest-environment node
 import fs from "node:fs";
+import { frontMatter } from "@/test/front-matter.js";
 import { INIT_COMMANDS } from "./init/init-command.js";
 import { START_INCLUDED, START_SEPARATE } from "./init/launcher.js";
 
@@ -16,7 +17,7 @@ const field = (text, name) => (frontmatter(text).match(new RegExp(`^${name}: (.*
 const flat = (text) => text.replace(/\s+/g, " ");
 /** Everything written as code: the code spans, and the lines of the code blocks. */
 function code(text) {
-  const blocks = [...text.matchAll(/^ *```[a-z]*\n([\s\S]*?)^ *```/gm)].flatMap((match) => match[1].split("\n"));
+  const blocks = [...text.matchAll(/^ *```[a-z]*\n([\s\S]*?)^ *```/gm)].flatMap((match) => match[1].split("\n").map((line) => line.trim()));
   const outside = text.replace(/^ *```[a-z]*\n[\s\S]*?^ *```/gm, "");
   return [...blocks, ...[...outside.matchAll(/`([^`\n]+)`/g)].map((match) => match[1])];
 }
@@ -124,4 +125,41 @@ test("setup explains before it writes, refuses a worktree, and checks the compos
   }
   expect(flat(text)).toMatch(/wait for a yes/i);
   expect(flat(text)).toMatch(/commit nothing unless the user asks/i);
+});
+
+test("each description reaches the model whole", () => {
+  for (const name of SKILLS) {
+    // What YAML reads is the whole line: nothing in it starts a comment or needs quoting.
+    expect(frontMatter(skill(name)).description).toBe(field(skill(name), "description"));
+  }
+});
+
+test("setup moves a board that exists into the project's compose file without a clash of names", () => {
+  const text = skill("setup");
+  const step = text.slice(text.indexOf("## 6."), text.indexOf("## 7."));
+  // The board's own container is removed first: the project's compose could not create one of that name.
+  expect(code(step)).toContain("docker compose -f .k-spec/compose.yaml down");
+  expect(step.indexOf("docker compose -f .k-spec/compose.yaml down")).toBeLessThan(step.indexOf("```yaml"));
+  // And it knows what to do when init did not see the entry.
+  expect(flat(step)).toMatch(/does not say "part of"/i);
+  // A compose file that was broken before the edit is not blamed on the edit.
+  expect(flat(step)).toMatch(/before (you edit|the edit)/i);
+});
+
+test("setup sees a board of another checkout also when that board is stopped", () => {
+  const text = skill("setup");
+  expect(text).toContain("server not running");
+  expect(flat(text)).toMatch(/the checkout that has `\.k-spec\/\.env`/);
+});
+
+test("stop looks at the board's file in the checkout the board writes to", () => {
+  const text = flat(skill("stop"));
+  const step = text.slice(text.indexOf("3. **"), text.indexOf("4. **"));
+  expect(step).toMatch(/in that same checkout/i);
+});
+
+test("use stops, with the logs, when the board does not come up", () => {
+  const text = flat(skill("use"));
+  expect(text).toMatch(/still does not print the board/i);
+  expect(text).toMatch(/last lines/i);
 });
