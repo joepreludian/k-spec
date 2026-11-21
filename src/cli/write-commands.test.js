@@ -14,7 +14,7 @@ test("usage names every command", () => {
     expect(USAGE).toContain(`  ${command.usage}`);
   }
   expect(Object.keys(COMMAND_HANDLERS)).toEqual([
-    "board", "show", "watch", "comment", "status", "move", "check", "uncheck", "add", "delete", "start", "end", "link", "publish", "unpublish", "run", "init",
+    "board", "show", "watch", "comment", "status", "move", "check", "uncheck", "checklist", "add", "delete", "start", "end", "link", "publish", "unpublish", "run", "init",
   ]);
 });
 
@@ -285,4 +285,60 @@ test("a card removed between the lookup and the write is the server's not-found"
   });
   expect(raced.code).toBe(1);
   expect(raced.err).toMatch(/^error: Card .*not found/);
+});
+
+const checklistsOf4 = async (server) => cardByNumber(await after(server), 4).card.checklists;
+
+test("checklist adds a checklist with its items, in order", async () => {
+  const added = await run(["checklist", "4", "Plan", "1. First", "2. Second"]);
+  expect([added.code, added.out]).toEqual([0, '#4 checklist 3 "Plan" added (2 items)']);
+  const checklists = await checklistsOf4(added.server);
+  expect(checklists.map((k) => k.title)).toEqual(["A", "B", "Plan"]);
+  expect(checklists[2].items.map((item) => [item.text, item.done])).toEqual([["1. First", false], ["2. Second", false]]);
+  expect(posts(added.server).map(([name]) => name)).toEqual(["addChecklist", "addChecklistItem", "addChecklistItem"]);
+});
+
+test("a single - reads the items from stdin, one per line, exactly as typed", async () => {
+  const added = await run(["checklist", "4", "Plan", "-"], { stdin: "1. Use `init`\n\n2. Costs $HOME\r\n3. Third\n" });
+  expect(added.out).toBe('#4 checklist 3 "Plan" added (3 items)');
+  expect((await checklistsOf4(added.server))[2].items.map((item) => item.text)).toEqual(["1. Use `init`", "2. Costs $HOME", "3. Third"]);
+  // A dash among other items is an item like any other.
+  const dash = await run(["checklist", "4", "Plan", "--", "-", "b"]);
+  expect((await checklistsOf4(dash.server))[2].items.map((item) => item.text)).toEqual(["-", "b"]);
+});
+
+test("no items and one item are said in words", async () => {
+  expect((await run(["checklist", "4", "Plan"])).out).toBe('#4 checklist 3 "Plan" added (no items)');
+  expect((await run(["checklist", "4", "Plan", "Only"])).out).toBe('#4 checklist 3 "Plan" added (1 item)');
+  expect((await run(["checklist", "4", "Plan", "-"], { stdin: "\n" })).out).toBe('#4 checklist 3 "Plan" added (no items)');
+});
+
+test("an item the board refuses stops there and says how far it got", async () => {
+  const half = await run(["checklist", "4", "Plan", "A", "", "C"]);
+  expect([half.code, half.out]).toEqual([1, ""]);
+  expect(half.err).toMatch(/^error: #4 checklist 3 "Plan" added with 1 of 3 items; the next one was refused: /);
+  expect((await checklistsOf4(half.server))[2].items.map((item) => item.text)).toEqual(["A"]);
+});
+
+test("checklist on a card that is not there, or with a title the board refuses, adds nothing", async () => {
+  const missing = await run(["checklist", "99", "Plan", "A"]);
+  expect([missing.code, posts(missing.server)]).toEqual([1, []]);
+  const untitled = await run(["checklist", "4", " ", "A"]);
+  expect(untitled.code).toBe(1);
+  expect(await checklistsOf4(untitled.server)).toHaveLength(2);
+});
+
+test("--json on checklist prints the id, the number and the items' ids", async () => {
+  const added = await run(["checklist", "4", "Plan", "A", "B", "--json"]);
+  const answer = JSON.parse(added.out);
+  const [, , plan] = await checklistsOf4(added.server);
+  expect(answer).toEqual({ id: plan.id, number: 3, items: plan.items.map((item) => item.id), version: 4 });
+});
+
+test("check takes the checklist's title", async () => {
+  const check = await run(["check", "4", "B.1"]);
+  expect(check.out).toBe("#4 B.1 checked");
+  expect((await checklistsOf4(check.server))[1].items[0].done).toBe(true);
+  const missing = await run(["check", "4", "Plan.1"]);
+  expect([missing.code, missing.err]).toEqual([1, 'error: Checklist "Plan" not found on card #4 (checklists: A, B)']);
 });

@@ -37,17 +37,45 @@ export function laneByName(board, name) {
   throw new LookupError(`Lane "${name}" matches several lanes (${names(matches, "name")})`, "AMBIGUOUS");
 }
 
-/** The item at `c.i` (checklist c, item i, both counted from 1, as `show` prints them). */
+/**
+ * A checklist item of the card, named one of two ways: `c.i` (checklist c, item i, both counted
+ * from 1, as `show` prints them), or `<checklist title>.<i>` (the whole title, ignoring case and
+ * surrounding spaces, then the item's number in it). The title is everything before the last
+ * dot. Digits before the dot always mean the checklist's number, also on a card that has a
+ * checklist titled with a number. The second form is what a plan can write before the checklist
+ * exists: it does not depend on how many checklists the card has by then.
+ */
 export function checklistItemAt(card, ref) {
-  const match = /^([1-9]\d*)\.([1-9]\d*)$/.exec(ref);
-  if (!match) {
-    throw new LookupError(
-      `Not an item number: ${ref} (use the c.i number from show, e.g. 1.2)`,
+  const invalid = () =>
+    new LookupError(
+      `Not an item: ${ref} (use the c.i number from show, e.g. 1.2, or <checklist title>.<i>)`,
       "INVALID_REFERENCE",
     );
+  const dot = ref.lastIndexOf(".");
+  if (dot < 0) throw invalid();
+  const first = ref.slice(0, dot);
+  const index = ref.slice(dot + 1);
+  if (!/^[1-9]\d*$/.test(index)) throw invalid();
+  let checklist;
+  if (/^\s*\d+\s*$/.test(first)) {
+    if (!/^[1-9]\d*$/.test(first)) throw invalid();
+    checklist = card.checklists[Number(first) - 1];
+  } else {
+    const title = first.trim();
+    if (!title) throw invalid();
+    const matches = card.checklists.filter((entry) => same(entry.title, title));
+    if (matches.length === 0) {
+      throw new LookupError(`Checklist "${title}" not found on card #${card.number} (checklists: ${names(card.checklists, "title")})`);
+    }
+    if (matches.length > 1) {
+      throw new LookupError(
+        `Checklist "${title}" matches several checklists on card #${card.number} (use the c.i number from show)`,
+        "AMBIGUOUS",
+      );
+    }
+    [checklist] = matches;
   }
-  const checklist = card.checklists[Number(match[1]) - 1];
-  const item = checklist?.items[Number(match[2]) - 1];
+  const item = checklist?.items[Number(index) - 1];
   if (!item) throw new LookupError(`Card #${card.number} has no item ${ref}`);
   return { checklist, item };
 }

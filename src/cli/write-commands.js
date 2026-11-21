@@ -57,7 +57,7 @@ function parseInput(text) {
 
 const tick = (wanted) => ({
   usage: `${wanted ? "check" : "uncheck"} <n> <item>`,
-  summary: `${wanted ? "tick" : "untick"} a checklist item by the c.i number show prints (e.g. 1.2)`,
+  summary: `${wanted ? "tick" : "untick"} a checklist item: the c.i number show prints (e.g. 1.2), or <checklist title>.<i>`,
   options: {},
   arity: [2, 2],
   async run(ctx, { positionals: [n, ref] }) {
@@ -112,6 +112,34 @@ export const WRITE_COMMANDS = {
   },
   check: tick(true),
   uncheck: tick(false),
+  checklist: {
+    usage: "checklist <n> <title> [<item>...]",
+    summary: "add a checklist with its items to the card (a single - reads the items from stdin, one per line)",
+    options: {},
+    arity: [2, Infinity],
+    async run(ctx, { positionals: [n, title, ...words] }) {
+      const fromStdin = words.length === 1 && words[0] === "-";
+      const items = fromStdin ? (await ctx.readStdin()).split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : words;
+      const { card, number } = await findCard(ctx.api, n);
+      const created = await ctx.api.execute("addChecklist", { cardId: card.id, title });
+      const checklists = cardByNumber(created.board, number).card.checklists;
+      const position = checklists.findIndex((entry) => entry.id === created.id) + 1;
+      const line = `#${number} checklist ${position} "${checklists[position - 1].title}" added`;
+      const ids = [];
+      let last = created;
+      for (const text of items) {
+        try {
+          last = await ctx.api.execute("addChecklistItem", { cardId: card.id, checklistId: created.id, text });
+        } catch (error) {
+          if (!(error instanceof DomainError)) throw error;
+          throw new DomainError(`${line} with ${ids.length} of ${items.length} items; the next one was refused: ${error.message}`, error.code);
+        }
+        ids.push(last.id);
+      }
+      const count = items.length === 0 ? "no items" : items.length === 1 ? "1 item" : `${items.length} items`;
+      report(ctx, `${line} (${count})`, { id: created.id, number: position, items: ids, version: last.version });
+    },
+  },
   add: {
     usage: "add <lane> <title> [--description <text>]",
     summary: "create a card at the end of a lane (- reads the description from stdin)",
