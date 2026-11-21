@@ -182,3 +182,14 @@ test("with saving off, opening the store writes no dump", () => {
   getServerStore();
   expect(fs.existsSync(process.env.K_SPEC_DUMP)).toBe(false);
 });
+
+test("a change whose write failed is written when the server stops, if no other change came", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  const store = await edit("Edited");
+  fs.rmSync(process.env.K_SPEC_DUMP);
+  fs.mkdirSync(process.env.K_SPEC_DUMP);
+  store.saved();
+  fs.rmdirSync(process.env.K_SPEC_DUMP);
+  expect(dumpOnShutdown()).toBe(true);
+  expect(dumpedName()).toBe("Edited");
+});
