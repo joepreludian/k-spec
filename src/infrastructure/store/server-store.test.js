@@ -3,21 +3,24 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { seedBoard } from "@/infrastructure/seed-board.js";
-import { dumpOnShutdown, getServerStore, registerShutdownDump, resetServerStore, startServerStore } from "./server-store.js";
+import { serializeDump } from "./board-dump.js";
+import { dumpOnShutdown, getServerStore, registerShutdownDump, resetServerStore, savingNotice, startServerStore } from "./server-store.js";
 
 let dir;
-const saved = { db: process.env.K_SPEC_DB, dump: process.env.K_SPEC_DUMP };
+const saved = { db: process.env.K_SPEC_DB, dump: process.env.K_SPEC_DUMP, auto: process.env.K_SPEC_AUTO_DUMP };
 const restore = (key, value) => (value === undefined ? delete process.env[key] : (process.env[key] = value));
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "kspec-server-"));
   process.env.K_SPEC_DB = path.join(dir, "k.db");
   process.env.K_SPEC_DUMP = path.join(dir, "k.dump.json");
+  delete process.env.K_SPEC_AUTO_DUMP;
 });
 afterEach(() => {
   resetServerStore();
   restore("K_SPEC_DB", saved.db);
   restore("K_SPEC_DUMP", saved.dump);
+  restore("K_SPEC_AUTO_DUMP", saved.auto);
   fs.rmSync(dir, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
@@ -31,19 +34,65 @@ test("shutting down before the store was used writes nothing and opens nothing",
   expect(fs.readdirSync(dir)).toEqual([]);
 });
 
-test("shutting down after the store was used writes the dump", async () => {
-  const { deps } = getServerStore();
-  await deps.repository.save({ ...seedBoard(), name: "Edited" });
-  expect(dumpOnShutdown()).toBe(true);
-  expect(JSON.parse(fs.readFileSync(process.env.K_SPEC_DUMP, "utf8")).board.name).toBe("Edited");
+const dumpedName = () => JSON.parse(fs.readFileSync(process.env.K_SPEC_DUMP, "utf8")).board.name;
+const edit = async (name) => {
+  const store = getServerStore();
+  await store.deps.repository.save({ ...seedBoard(), name });
+  return store;
+};
+
+test("after a change the dump holds the board while the server runs", async () => {
+  const store = await edit("Edited");
+  store.saved();
+  expect(dumpedName()).toBe("Edited");
 });
 
-test("a dump that cannot be written is logged, not thrown", () => {
+test("with saving off a change writes nothing until the server stops", async () => {
+  process.env.K_SPEC_AUTO_DUMP = "off";
+  const store = await edit("Edited");
+  store.saved();
+  expect(fs.existsSync(process.env.K_SPEC_DUMP)).toBe(false);
+  expect(dumpOnShutdown()).toBe(true);
+  expect(dumpedName()).toBe("Edited");
+});
+
+test("with saving on, stopping leaves the dump alone", async () => {
+  const store = await edit("Edited");
+  store.saved();
+  // Someone else (a git pull) replaces the file while the server runs.
+  fs.writeFileSync(process.env.K_SPEC_DUMP, serializeDump({ ...seedBoard(), name: "Pulled" }));
+  expect(dumpOnShutdown()).toBe(false);
+  expect(dumpedName()).toBe("Pulled");
+});
+
+test("a dump that could not be written is logged, written by the next change, and by stopping if none comes", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  const store = await edit("Edited");
+  fs.mkdirSync(process.env.K_SPEC_DUMP); // a folder sits where the file should go
+  expect(() => store.saved()).not.toThrow();
+  expect(console.error.mock.calls.flat().join(" ")).toContain(process.env.K_SPEC_DUMP);
+  expect(dumpOnShutdown()).toBe(true); // the server holds a change the file does not have
+  fs.rmdirSync(process.env.K_SPEC_DUMP);
+  store.saved();
+  expect(dumpedName()).toBe("Edited");
+  expect(dumpOnShutdown()).toBe(false);
+});
+
+test("a dump that cannot be written when the server stops is logged, not thrown", () => {
+  process.env.K_SPEC_AUTO_DUMP = "off";
   vi.spyOn(console, "error").mockImplementation(() => {});
   getServerStore();
   fs.mkdirSync(process.env.K_SPEC_DUMP); // a folder sits where the file should go
   expect(() => dumpOnShutdown()).not.toThrow();
   expect(console.error).toHaveBeenCalled();
+});
+
+test("the notice names the dump and the mode", () => {
+  expect(savingNotice()).toContain(process.env.K_SPEC_DUMP);
+  expect(savingNotice()).toContain("every change");
+  process.env.K_SPEC_AUTO_DUMP = "off";
+  expect(savingNotice()).toContain(process.env.K_SPEC_DUMP);
+  expect(savingNotice()).toContain("K_SPEC_AUTO_DUMP");
 });
 
 test("the shutdown dump is registered on process exit once, however often it is asked for", () => {

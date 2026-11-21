@@ -7,10 +7,11 @@ import { getServerStore } from "@/infrastructure/store/server-store.js";
  */
 export async function POST(request, { params }) {
   const { name } = await params;
-  const { deps, queue } = getServerStore();
+  const { deps, queue, saved } = getServerStore();
   const { status, body } = await runCommand({
     deps,
     queue,
+    saved,
     name,
     contentType: request.headers.get("content-type"),
     text: await request.text(),

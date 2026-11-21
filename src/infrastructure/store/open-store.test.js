@@ -5,7 +5,7 @@ import path from "node:path";
 import { seedBoard } from "@/infrastructure/seed-board.js";
 import { starterBoard } from "@/infrastructure/starter-board.js";
 import { DumpError, serializeDump } from "./board-dump.js";
-import { openStore, storePaths } from "./open-store.js";
+import { autoDumpEnabled, openStore, storePaths } from "./open-store.js";
 
 let dir;
 let paths;
@@ -100,4 +100,9 @@ test("a database that has a board keeps it when the board name changes", () => {
   const store = openStore({ ...paths, boardName: "Second" });
   expect(store.repository.readSync().name).toBe("First");
   store.close();
+});
+
+test("saving on every change is on unless K_SPEC_AUTO_DUMP says off", () => {
+  for (const value of ["off", "OFF", " 0 ", "false", "no"]) expect(autoDumpEnabled({ K_SPEC_AUTO_DUMP: value })).toBe(false);
+  for (const env of [{}, { K_SPEC_AUTO_DUMP: "" }, { K_SPEC_AUTO_DUMP: "on" }, { K_SPEC_AUTO_DUMP: "1" }]) expect(autoDumpEnabled(env)).toBe(true);
 });

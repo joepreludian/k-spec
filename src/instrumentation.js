@@ -1,4 +1,4 @@
-/** Runs once when the Next.js server starts: prints the access link, leaves the CLI its note and arranges the dump on shutdown. */
+/** Runs once when the Next.js server starts: prints the access link, leaves the CLI its note, opens the store and says how the board is saved. */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { resolveToken } = await import("./infrastructure/access/token.js");
@@ -12,8 +12,10 @@ export async function register() {
   announceServer({ token });
 
   // Open the board store now: a dump that cannot be imported stops the server here, file named.
-  const { registerShutdownDump, startServerStore } = await import("./infrastructure/store/server-store.js");
+  const { registerShutdownDump, savingNotice, startServerStore } = await import("./infrastructure/store/server-store.js");
   startServerStore();
-  // The dump is written when the server stops (and on demand with `npm run db:dump`).
+  console.log(`  ${savingNotice()}\n`);
+  // With saving on every change the dump is written after each command; the exit hook writes
+  // it when that is off, or when a write had failed.
   registerShutdownDump();
 }

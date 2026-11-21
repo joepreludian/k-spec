@@ -106,3 +106,35 @@ test("two commands sent at the same moment both take effect", async () => {
   expect(new Set(made.map((c) => c.number)).size).toBe(2);
   expect(repository.version()).toBe(3);
 });
+
+test("a command that succeeds reports the change once", async () => {
+  const saved = vi.fn();
+  const { status, body } = await post("createCard", { laneId: "lane-backlog", title: "New" }, { saved });
+  expect(status).toBe(200);
+  expect(saved).toHaveBeenCalledTimes(1);
+  expect(body.version).toBe(repository.version());
+});
+
+test("a command that is refused, unknown or malformed reports nothing", async () => {
+  const saved = vi.fn();
+  expect((await post("createCard", { laneId: "lane-backlog", title: "  " }, { saved })).status).toBe(422);
+  expect((await post("nope", {}, { saved })).status).toBe(404);
+  expect((await post("createCard", {}, { saved, text: "[1]" })).status).toBe(400);
+  expect((await post("createCard", {}, { saved, contentType: "text/plain" })).status).toBe(415);
+  expect(saved).not.toHaveBeenCalled();
+});
+
+test("the change is reported before the next command starts", async () => {
+  const order = [];
+  const load = repository.load;
+  repository.load = async () => {
+    order.push("load");
+    return load();
+  };
+  const saved = () => order.push("saved");
+  await Promise.all([
+    post("createCard", { laneId: "lane-backlog", title: "One" }, { saved }),
+    post("createCard", { laneId: "lane-backlog", title: "Two" }, { saved }),
+  ]);
+  expect(order).toEqual(["load", "saved", "load", "saved"]);
+});

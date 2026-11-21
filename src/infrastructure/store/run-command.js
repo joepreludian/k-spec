@@ -20,8 +20,9 @@ function parseInput(text) {
  * 200 `{ ...result, version }` · 422 `{ error, code }` for a broken domain rule · 404 unknown
  * command · 400 body is not a JSON object · 415 not sent as JSON · 500 anything else.
  * `deps` is `{ repository, clock, idGenerator }`; `queue` makes commands run one at a time.
+ * `saved()` is told about every command that changed the board, before the next one runs.
  */
-export async function runCommand({ deps, queue, name, contentType, text }) {
+export async function runCommand({ deps, queue, name, contentType, text, saved }) {
   if (!isJson(contentType)) return answer(415, { error: "Content-Type must be application/json" });
   if (!isCommand(name)) return answer(404, { error: `Unknown command: ${name}` });
   const input = parseInput(text);
@@ -29,6 +30,7 @@ export async function runCommand({ deps, queue, name, contentType, text }) {
   try {
     return await queue.run(async () => {
       const result = await COMMANDS[name](deps, input);
+      saved?.();
       return answer(200, { ...result, version: deps.repository.version() });
     });
   } catch (error) {

@@ -18,6 +18,16 @@ export function storePaths(env = process.env, cwd = process.cwd()) {
   };
 }
 
+const OFF = new Set(["off", "0", "false", "no"]);
+
+/**
+ * Whether the server writes the dump after every change. It does, unless `K_SPEC_AUTO_DUMP`
+ * says `off` (or `0`, `false`, `no`): then the dump is written when the server stops and on demand.
+ */
+export function autoDumpEnabled(env = process.env) {
+  return !OFF.has((env.K_SPEC_AUTO_DUMP ?? "").trim().toLowerCase());
+}
+
 /**
  * Opens the board store. A database that holds no board yet is filled from the dump file when
  * there is one; otherwise with an empty board called `boardName` when that is given, else with
