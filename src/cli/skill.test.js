@@ -14,8 +14,10 @@ test("the skill exists, is named, and only uses commands the CLI has", () => {
   expect(frontmatter).toMatch(/^name: k-spec$/m);
   expect(frontmatter).toMatch(/^description: \S.{40,}$/m);
 
-  // Every `k-spec <word> …` written as code must be something the CLI accepts.
-  const used = [...text.matchAll(/`k-spec ([a-z-]+)[^`]*`/g)].map((match) => match[1]);
+  // Every `k-spec <word> …` written as code must be something the CLI accepts: in a code span,
+  // or at the start of a line in a code block.
+  const blocks = [...text.matchAll(/^ *```[a-z]*\n([\s\S]*?)^ *```/gm)].map((match) => match[1]).join("\n");
+  const used = [...text.matchAll(/`k-spec ([a-z-]+)[^`]*`/g), ...blocks.matchAll(/^ *k-spec ([a-z-]+)/gm)].map((match) => match[1]);
   expect(used.length).toBeGreaterThan(5);
   for (const name of used) expect(Object.keys(COMMAND_HANDLERS).concat("help")).toContain(name);
   for (const name of ["watch", "show", "status", "comment", "link"]) expect(used).toContain(name);
@@ -74,4 +76,45 @@ test("the copy init writes into a project names the launcher and changes nothing
   expect(added).toContain("`.k-spec/k-spec watch`");
   // The note names no command the CLI lacks: the same guard as for the skill itself.
   for (const [, name] of added.matchAll(/`k-spec ([a-z-]+)[^`]*`/g)) expect(Object.keys(COMMAND_HANDLERS)).toContain(name);
+});
+
+test("the skill says how to work a task on the board, and only when asked", () => {
+  const text = fs.readFileSync(FILE, "utf8");
+  const [, frontmatter] = text.match(/^---\n([\s\S]*?)\n---\n/);
+  expect(frontmatter).toMatch(/^description: .*using k-spec/m);
+  // The plugin's `use` skill sends the agent to this heading: it must not be renamed.
+  const at = text.indexOf("\n## Working a task on the board\n");
+  expect(at).toBeGreaterThan(0);
+  const section = text.slice(at, text.indexOf("\n## ", at + 1));
+  for (const written of [
+    'k-spec add Backlog "<title>" --description -',
+    "Card: k-spec #<n>",
+    'k-spec link <n> <path> "Design"',
+    "k-spec checklist <n> Plan - <<'EOF'",
+    "k-spec status <n> working",
+    'k-spec move <n> "In Progress"',
+    "k-spec start <n>",
+    "k-spec check <n> Plan.<N>",
+    "k-spec move <n> Done",
+    "k-spec status <n> idle",
+    "k-spec end <n>",
+    'k-spec board --lane "In Progress"',
+    "/k-spec:use",
+  ]) {
+    expect(section).toContain(written);
+  }
+  // The text is wrapped: a phrase may run over a line end.
+  const prose = section.replace(/\s+/g, " ");
+  for (const phrase of [/only after the user asked/i, /offer once/i, /never blocks the build/i, /never create or rename a lane/i, /stage files by name/i]) {
+    expect(prose).toMatch(phrase);
+  }
+  // The card's number is written as plain text, not as a code span the guard above reads as a command.
+  expect(section).not.toMatch(/`k-spec card/);
+});
+
+test("the older rules agree with the workflow", () => {
+  const text = fs.readFileSync(FILE, "utf8");
+  expect(text.replace(/\s+/g, " ")).toMatch(/move it to another lane unless the user asked/);
+  expect(text).toMatch(/do not try to start, restart or stop/);
+  for (const skill of ["/k-spec:use", "/k-spec:stop"]) expect(text).toContain(skill);
 });
